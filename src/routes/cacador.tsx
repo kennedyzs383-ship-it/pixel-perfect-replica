@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CacadorAIAssistant } from "../components/cacador-ai-assistant";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Building2, Search, Plus, ExternalLink, MessageCircle, ClipboardList, Target, Sparkles, ShieldCheck, Globe2, Trash2, X, Save, Filter, Download, Upload, Cloud, LogIn, LogOut, RefreshCw } from "lucide-react";
 import { createCloudConversation, createCloudMessage, createCloudTask, deleteCloudLead, getSignedInUser, isSupabaseConfigured, loadCloudLeads, loadLeadWorkspace, saveCloudLeads, signIn, signOut, signUp, updateCloudTaskStatus, type CacadorCloudLead, type CloudConversation, type CloudMessage, type CloudTask } from "../lib/nuvem-supabase";
@@ -271,7 +272,8 @@ function CacadorPage() {
     <header className="hunter-top"><a href="/" className="back"><ArrowLeft size={17}/> Painel Nuvem</a><div className="hunter-brand"><span>CA</span><div><b>Caçador</b><small>Inteligência comercial · Nuvem</small></div></div><div className="top-status"><i/> Área de trabalho</div></header>
     <main className="hunter-main">
       <div className="hero"><div><div className="eyebrow"><Sparkles size={14}/> CENTRO DE PROSPEÇÃO</div><h1>Encontra oportunidades.<br/><em>Constrói relações.</em></h1><p>Organiza empresas, investiga a presença digital e acompanha cada oportunidade comercial num só lugar.</p></div><div className="hero-icon"><Target size={52}/><span>CAÇADOR</span></div></div>
-      <section className="notice"><ShieldCheck size={18}/><div><b>Modo assistido ativo</b><span>O Caçador ainda não tem motor de IA, pesquisa automática nem chamadas ligadas. As pesquisas e os contactos continuam manuais. Não enviamos mensagens nem fazemos chamadas sem ação tua.</span></div></section>
+      <section className="notice"><ShieldCheck size={18}/><div><b>Modo assistido com IA</b><span>O assistente inteligente já está disponível. A voz depende das permissões e do suporte do navegador. Prospeção externa, contactos e publicação continuam a exigir confirmação e integrações próprias.</span></div></section>
+      <CacadorAIAssistant />
        <section className="cloud-panel">
          <div className="cloud-panel-heading"><Cloud size={18}/><div><b>Sincronização segura</b><span>{user ? "Conta ligada: " + (user.email || user.id) : "Liga a tua conta para guardar as empresas no Supabase e aceder noutros dispositivos."}</span></div></div>
          {!cloudConfigured ? <div className="cloud-setup"><p>Falta configurar as variáveis públicas do Supabase na aplicação. Não coloques aqui a chave secreta nem a service_role.</p><code>VITE_SUPABASE_URL</code><code>VITE_SUPABASE_PUBLISHABLE_KEY</code><a href="https://supabase.com/dashboard/project/emcdkxxmfqgejfmfpxwe/settings/api" target="_blank" rel="noreferrer">Abrir definições de API do Supabase</a></div> :
