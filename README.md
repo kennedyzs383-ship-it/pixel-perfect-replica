@@ -1,6 +1,10 @@
 # Nuvem
 
-Painel pessoal para organizar projetos de websites e construir páginas com um editor visual. A aplicação não inclui autenticação privada nesta etapa, conforme a decisão do proprietário.
+Painel pessoal e privado para organizar projetos de websites e construir páginas com um editor visual. A autenticação existente deve permanecer sem alterações.
+
+## Regra de custos
+
+A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de domínios, checkout, pagamentos, faturação, subscrições ou upgrades. Os websites publicados usarão subdomínios gratuitos do fornecedor de alojamento, sempre dentro dos limites do plano gratuito. Se um fornecedor exigir pagamento ou cartão para continuar, não será utilizado.
 
 ## O que está disponível
 
@@ -17,7 +21,8 @@ Painel pessoal para organizar projetos de websites e construir páginas com um e
 
 - Os dados de projetos e os rascunhos ficam no navegador/dispositivo onde foram criados. Limpar os dados do navegador pode apagá-los.
 - Exportar HTML cria um ficheiro para publicação noutro serviço; não publica o website na internet.
-- Domínios, alojamento, email profissional, bases de dados, SSL, backups remotos e monitorização ainda não estão ligados a fornecedores reais.
+- Supabase está ativo, mas deve ser usado apenas no plano Free. O painel ainda não está ligado às tabelas privadas.
+- Alojamento e publicação gratuitos ainda não estão ligados.
 - A aplicação não configura nem altera a autenticação do Supabase.
 
 ## Executar localmente
@@ -38,7 +43,7 @@ bun run build
 
 ## Infraestrutura
 
-O painel de estado da infraestrutura está disponível em `/infraestrutura`. A configuração atual e os passos para ligar fornecedores estão em [docs/INFRAESTRUTURA.md](docs/INFRAESTRUTURA.md).
+O painel de estado da infraestrutura está disponível em `/infraestrutura`. A política de custos e o estado real estão em [docs/INFRAESTRUTURA.md](docs/INFRAESTRUTURA.md).
 
 ## Projeto
 
