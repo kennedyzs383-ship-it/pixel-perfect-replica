@@ -10,8 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as EditorRouteImport } from './routes/editor'
 import { Route as CacadorRouteImport } from './routes/cacador'
+import { Route as EditorRouteImport } from './routes/editor'
 import { Route as InfraestruturaRouteImport } from './routes/infraestrutura'
 
 const IndexRoute = IndexRouteImport.update({
@@ -19,14 +19,14 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EditorRoute = EditorRouteImport.update({
-  id: '/editor',
-  path: '/editor',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const CacadorRoute = CacadorRouteImport.update({
   id: '/cacador',
   path: '/cacador',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InfraestruturaRoute = InfraestruturaRouteImport.update({
@@ -37,35 +37,35 @@ const InfraestruturaRoute = InfraestruturaRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/editor': typeof EditorRoute
   '/cacador': typeof CacadorRoute
+  '/editor': typeof EditorRoute
   '/infraestrutura': typeof InfraestruturaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/editor': typeof EditorRoute
   '/cacador': typeof CacadorRoute
+  '/editor': typeof EditorRoute
   '/infraestrutura': typeof InfraestruturaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/editor': typeof EditorRoute
   '/cacador': typeof CacadorRoute
+  '/editor': typeof EditorRoute
   '/infraestrutura': typeof InfraestruturaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/editor' | '/cacador' | '/infraestrutura'
+  fullPaths: '/' | '/cacador' | '/editor' | '/infraestrutura'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/editor' | '/cacador' | '/infraestrutura'
-  id: '__root__' | '/' | '/editor' | '/cacador' | '/infraestrutura'
+  to: '/' | '/cacador' | '/editor' | '/infraestrutura'
+  id: '__root__' | '/' | '/cacador' | '/editor' | '/infraestrutura'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  EditorRoute: typeof EditorRoute
   CacadorRoute: typeof CacadorRoute
+  EditorRoute: typeof EditorRoute
   InfraestruturaRoute: typeof InfraestruturaRoute
 }
 
@@ -78,18 +78,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/editor': {
-      id: '/editor'
-      path: '/editor'
-      fullPath: '/editor'
-      preLoaderRoute: typeof EditorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/cacador': {
       id: '/cacador'
       path: '/cacador'
       fullPath: '/cacador'
       preLoaderRoute: typeof CacadorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/infraestrutura': {
@@ -104,8 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  EditorRoute: EditorRoute,
   CacadorRoute: CacadorRoute,
+  EditorRoute: EditorRoute,
   InfraestruturaRoute: InfraestruturaRoute,
 }
 export const routeTree = rootRouteImport
