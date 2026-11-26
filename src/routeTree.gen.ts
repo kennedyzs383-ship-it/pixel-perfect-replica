@@ -40,19 +40,19 @@ export interface FileRoutesByFullPath {
   '/editor': typeof EditorRoute
   '/cacador': typeof CacadorRoute
   '/infraestrutura': typeof InfraestruturaRoute
-  '/infraestrutura': typeof InfraestruturaRoute
-  '/infraestrutura': typeof InfraestruturaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/editor': typeof EditorRoute
   '/cacador': typeof CacadorRoute
+  '/infraestrutura': typeof InfraestruturaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/editor': typeof EditorRoute
   '/cacador': typeof CacadorRoute
+  '/infraestrutura': typeof InfraestruturaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
