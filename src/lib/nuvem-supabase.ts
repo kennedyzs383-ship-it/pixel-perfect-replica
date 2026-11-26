@@ -275,3 +275,87 @@ export async function saveCloudLeads(leads: CacadorCloudLead[], ownerId: string)
 export async function deleteCloudLead(id: string) {
   await restFetch("leads?id=eq." + encodeURIComponent(id), { method: "DELETE" });
 }
+
+
+export type CloudConversation = {
+  id: string;
+  lead_id: string | null;
+  channel: "manual" | "whatsapp" | "voice" | "email" | "other";
+  subject: string | null;
+  status: "open" | "waiting" | "closed";
+  created_at: string;
+};
+export type CloudMessage = {
+  id: string;
+  conversation_id: string;
+  direction: "inbound" | "outbound" | "internal";
+  body: string;
+  sent_at: string;
+};
+export type CloudTask = {
+  id: string;
+  lead_id: string | null;
+  title: string;
+  details: string | null;
+  status: "todo" | "in_progress" | "blocked" | "done" | "cancelled";
+  due_at: string | null;
+  created_at: string;
+};
+
+export async function loadLeadWorkspace(leadId: string) {
+  const [conversations, tasks] = await Promise.all([
+    restFetch<CloudConversation[]>(
+      "conversations?select=id,lead_id,channel,subject,status,created_at&lead_id=eq." +
+      encodeURIComponent(leadId) + "&order=created_at.desc",
+    ),
+    restFetch<CloudTask[]>(
+      "tasks?select=id,lead_id,title,details,status,due_at,created_at&lead_id=eq." +
+      encodeURIComponent(leadId) + "&order=created_at.desc",
+    ),
+  ]);
+  const ids = conversations.map((item) => item.id);
+  const messages = ids.length
+    ? await restFetch<CloudMessage[]>(
+        "messages?select=id,conversation_id,direction,body,sent_at&conversation_id=in.(" +
+        ids.map(encodeURIComponent).join(",") + ")&order=sent_at.asc",
+      )
+    : [];
+  return { conversations, messages, tasks };
+}
+
+export async function createCloudConversation(leadId: string, ownerId: string, subject: string) {
+  const rows = await restFetch<CloudConversation[]>("conversations?select=id,lead_id,channel,subject,status,created_at", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ owner_id: ownerId, lead_id: leadId, channel: "manual", subject: subject || null }),
+  });
+  return rows[0];
+}
+
+export async function createCloudMessage(
+  conversationId: string, ownerId: string, body: string, direction: CloudMessage["direction"] = "internal",
+) {
+  const rows = await restFetch<CloudMessage[]>("messages?select=id,conversation_id,direction,body,sent_at", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ owner_id: ownerId, conversation_id: conversationId, body, direction }),
+  });
+  return rows[0];
+}
+
+export async function createCloudTask(leadId: string, ownerId: string, title: string, details: string, dueAt: string | null) {
+  const rows = await restFetch<CloudTask[]>("tasks?select=id,lead_id,title,details,status,due_at,created_at", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ owner_id: ownerId, lead_id: leadId, title, details: details || null, due_at: dueAt }),
+  });
+  return rows[0];
+}
+
+export async function updateCloudTaskStatus(taskId: string, status: CloudTask["status"]) {
+  await restFetch("tasks?id=eq." + encodeURIComponent(taskId), {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status }),
+  });
+}
