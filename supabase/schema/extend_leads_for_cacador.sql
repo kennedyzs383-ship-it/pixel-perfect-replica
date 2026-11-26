@@ -2,6 +2,11 @@
 -- Aplicada no projeto Supabase em 2026-11-26.
 -- Não remove nem altera os registos existentes.
 
+alter table public.leads drop constraint if exists leads_status_check;
+alter table public.leads
+  add constraint leads_status_check
+  check (status in ('new','investigating','qualified','contacted','replied','proposal','won','lost','archived'));
+
 alter table public.leads
   add column if not exists website_status text not null default 'not_checked',
   add column if not exists contact_name text,
