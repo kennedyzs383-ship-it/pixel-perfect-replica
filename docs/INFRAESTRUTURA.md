@@ -35,17 +35,9 @@ Cloudflare Pages oferece subdomínios `pages.dev` e um plano gratuito sujeito ao
 
 O schema `nuvem_private` não concede acesso a `anon` nem a `authenticated`; o acesso SQL está reservado a `service_role`. Nunca colocar a chave `service_role` no navegador ou em variáveis `VITE_*`.
 
-O Supabase Security Advisor reportou RLS desativado nas cinco tabelas do schema privado. Embora os privilégios do schema/tabelas estejam revogados para os papéis públicos, o Advisor exige que se decida sobre RLS. SQL proposto (a executar apenas após aprovação):
+As cinco tabelas do schema privado têm RLS ativado e não têm políticas. Além disso, confirmei que `anon` e `authenticated` não têm USAGE no schema nem SELECT nas tabelas. Portanto, estes papéis não conseguem aceder aos dados; `service_role` mantém acesso privilegiado. Não criar políticas públicas para estas tabelas. O aviso do Advisor sobre "RLS enabled no policy" é informativo neste contexto, pois a intenção é manter o schema fechado.
 
-```sql
-ALTER TABLE nuvem_private.websites ENABLE ROW LEVEL SECURITY;
-ALTER TABLE nuvem_private.domains ENABLE ROW LEVEL SECURITY;
-ALTER TABLE nuvem_private.domain_dns_records ENABLE ROW LEVEL SECURITY;
-ALTER TABLE nuvem_private.deployments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE nuvem_private.infrastructure_connections ENABLE ROW LEVEL SECURITY;
-```
-
-Com RLS ligado e sem políticas, os papéis `anon` e `authenticated` continuam sem acesso; `service_role` mantém acesso privilegiado. Não criar políticas públicas para estas tabelas.
+O Security Advisor também indica que a proteção de palavras-passe comprometidas está desativada. Esta opção depende da configuração Auth do projeto e não está disponível nas ferramentas de gestão conectadas; deve ser ativada manualmente em [Auth → Settings → Password Security](https://supabase.com/dashboard/project/emcdkxxmfqgejfmfpxwe/auth/users).
 
 ## Próximos passos técnicos
 
