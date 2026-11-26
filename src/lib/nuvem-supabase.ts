@@ -151,15 +151,14 @@ export async function signUp(email: string, password: string) {
 export async function getSignedInUser() {
   if (!isSupabaseConfigured() || !getSession()) return null;
   const session = await freshSession();
-  const user = await authFetch<SupabaseUser>("user", undefined, "GET").catch(async (error) => {
-    // The /user endpoint requires the access token; use the authenticated request below.
-    const response = await fetch(url + "/auth/v1/user", {
-      headers: { apikey: publishableKey!, Authorization: "Bearer " + session.access_token },
-    });
-    if (!response.ok) throw error;
-    return (await response.json()) as SupabaseUser;
+  const response = await fetch(url + "/auth/v1/user", {
+    headers: { apikey: publishableKey!, Authorization: "Bearer " + session.access_token },
   });
-  return user;
+  if (!response.ok) {
+    saveSession(null);
+    return null;
+  }
+  return (await response.json()) as SupabaseUser;
 }
 
 export async function signOut() {
