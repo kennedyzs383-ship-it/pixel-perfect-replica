@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Building2, Search, Plus, ExternalLink, MessageCircle, ClipboardList, Target, Sparkles, ShieldCheck, Globe2, Trash2, X, Save, Filter, Download, Upload, Cloud, LogIn, LogOut, RefreshCw } from "lucide-react";
 import { deleteCloudLead, getSignedInUser, isSupabaseConfigured, loadCloudLeads, saveCloudLeads, signIn, signOut, signUp, type CacadorCloudLead } from "../lib/nuvem-supabase";
 
@@ -24,9 +24,12 @@ const emptyLead = (): Omit<Lead, "id" | "createdAt"> => ({
   company: "", category: "", city: "", website: "", websiteStatus: "Não verificado",
   publicPhone: "", contactName: "", status: "Novo", notes: "", nextAction: "",
 });
-function readLeads(): Lead[] {
-  try { const value = localStorage.getItem(KEY); return value ? JSON.parse(value) as Lead[] : []; }
-  catch { return []; }
+function readLeads(ownerId?: string): Lead[] {
+  try {
+    const storageKey = ownerId ? KEY + ":" + ownerId : KEY;
+    const value = localStorage.getItem(storageKey);
+    return value ? JSON.parse(value) as Lead[] : [];
+  } catch { return []; }
 }
 function CacadorPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -45,8 +48,16 @@ function CacadorPage() {
   const [cloudMessage, setCloudMessage] = useState("");
   const cloudConfigured = isSupabaseConfigured();
 
-  const connectCloud = async (account: { id: string; email?: string }) => {
-    const local = readLeads();
+  const connectCloud = useCallback(async (account: { id: string; email?: string }) => {
+    const scopedKey = KEY + ":" + account.id;
+    const claimedOwner = localStorage.getItem(KEY + ":owner");
+    const hasScopedCache = localStorage.getItem(scopedKey) !== null;
+    let local = hasScopedCache ? readLeads(account.id) : [];
+    if (!hasScopedCache && (!claimedOwner || claimedOwner === account.id)) {
+      local = readLeads();
+      if (local.length) localStorage.setItem(scopedKey, JSON.stringify(local));
+      localStorage.setItem(KEY + ":owner", account.id);
+    }
     const remote = await loadCloudLeads();
     const localOnly = local.filter((item) => !remote.some((savedLead) =>
       savedLead.id === item.id ||
@@ -57,9 +68,9 @@ function CacadorPage() {
     const merged = [...localOnly, ...remote];
     setUser(account);
     setLeads(merged);
-    localStorage.setItem(KEY, JSON.stringify(merged));
+    localStorage.setItem(scopedKey, JSON.stringify(merged));
     setCloudMessage("Ligado à base de dados. Os registos estão sincronizados com a tua conta.");
-  };
+  }, []);
 
   useEffect(() => {
     const local = readLeads();
@@ -73,11 +84,11 @@ function CacadorPage() {
       if (active) setCloudMessage(error instanceof Error ? error.message : "Não foi possível recuperar a sessão.");
     });
     return () => { active = false; };
-  }, []);
+  }, [cloudConfigured, connectCloud]);
 
   const persist = (next: Lead[]) => {
     setLeads(next);
-    localStorage.setItem(KEY, JSON.stringify(next));
+    localStorage.setItem(user ? KEY + ":" + user.id : KEY, JSON.stringify(next));
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
     if (user) {
@@ -113,10 +124,10 @@ function CacadorPage() {
   };
 
   const handleSignOut = async () => {
-    localStorage.setItem(KEY, JSON.stringify(leads));
+    if (user) localStorage.setItem(KEY + ":" + user.id, JSON.stringify(leads));
     await signOut();
     setUser(null);
-    setCloudMessage("Sessão terminada. Os registos deste dispositivo continuam guardados localmente.");
+    setCloudMessage("Sessão terminada. Os registos desta conta continuam guardados neste dispositivo.");
   };
   const visible = useMemo(() => leads.filter((lead) => (filter === "Todos" || lead.status === filter) && [lead.company, lead.category, lead.city, lead.contactName].join(" ").toLowerCase().includes(query.toLowerCase())), [leads, filter, query]);
   const current = leads.find((lead) => lead.id === selected) ?? null;
