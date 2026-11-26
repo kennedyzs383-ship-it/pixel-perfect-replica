@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, ArrowUpRight, CheckCircle2, CircleDashed, Cloud, Database, Globe2, LockKeyhole, Server, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CircleDashed, Cloud, Database, Globe2, LockKeyhole, Server, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/infraestrutura")({
   head: () => ({ meta: [{ title: "Infraestrutura | Nuvem" }, { name: "description", content: "Domínios, DNS, alojamento e base de dados da Nuvem." }] }),
