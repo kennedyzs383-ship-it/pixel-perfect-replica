@@ -36,6 +36,10 @@ bun run test
 bun run build
 ```
 
+## Infraestrutura
+
+O painel de estado da infraestrutura está disponível em `/infraestrutura`. A configuração atual e os passos para ligar fornecedores estão em [docs/INFRAESTRUTURA.md](docs/INFRAESTRUTURA.md).
+
 ## Projeto
 
 O código está sincronizado com o GitHub e pode continuar a ser editado no [Lovable](https://lovable.dev/projects/339626e4-c2d4-4c0c-b9d2-139178f40948).
