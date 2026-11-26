@@ -4,15 +4,15 @@ Esta extensão foi adicionada sem remover as funcionalidades existentes do Caça
 
 ## Cérebro de IA
 
-O assistente usa a Gemini Developer API através de uma TanStack Start Server Function. A chave fica exclusivamente no servidor.
+O utilizador escolheu **Lovable AI** no formulário seguro, em vez de fornecer uma chave própria. O Caçador utiliza Gemini através do SDK Lovable AI exclusivamente em funções de servidor. Não é necessário configurar `GEMINI_API_KEY` nesta opção.
 
-1. Cria uma chave em https://aistudio.google.com/app/apikey.
-2. No ambiente de deploy da Nuvem, adiciona o segredo `GEMINI_API_KEY`.
-3. Faz novo deploy para disponibilizar a variável ao servidor.
+Em **Definições → Definições gerais → Chaves API → Google Gemini**, abre **Configurar Gemini** e usa **Testar ligação**. O estado **Ligado** exige uma resposta utilizável do modelo; autenticação recusada, falta de créditos, quotas, permissões e falhas de comunicação mantêm **Não ligado**. Cada reabertura verifica novamente e não guarda o resultado no navegador.
 
-Não coloques a chave em `.env` versionado, no navegador, em variáveis `VITE_*`, nem em mensagens ou commits.
+As chamadas exigem uma sessão validada no servidor, da conta Cloud ou do CRM original. A ligação original do CRM permanece separada através de `VITE_CACADOR_SUPABASE_URL` e `VITE_CACADOR_SUPABASE_PUBLISHABLE_KEY`; não são migrados dados, contas ou sessões para a infraestrutura de IA. As antigas variáveis públicas continuam compatíveis quando apontam para o mesmo projeto original.
 
-O modelo configurado é `gemini-2.5-flash`. A disponibilidade e os limites gratuitos dependem da conta, região e quotas do Google. Na camada gratuita, consulta as condições de privacidade do Google antes de enviares dados comerciais confidenciais: https://ai.google.dev/gemini-api/terms.
+O modelo existente é preservado. A utilização consome os créditos disponíveis no Lovable e depende das políticas de acesso e retenção de dados da conta; não existe garantia de utilização gratuita ilimitada. Não são ativados pagamentos, upgrades ou substituições automáticas de modelo. Se o Gemini for recusado pela política da conta, o teste apresenta essa limitação sem alegar sucesso.
+
+Nunca colocar credenciais em `.env` versionado, no navegador, em variáveis `VITE_*`, em mensagens ou commits. A janela da Nuvem não recebe chaves e não simula a gravação de Secrets. Para uma futura chave própria, usar exclusivamente o formulário seguro do Lovable e publicar para atualizar a versão publicada.
 
 ## Voz
 

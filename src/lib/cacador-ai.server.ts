@@ -13,6 +13,7 @@ export async function generateCacadorAnswer(message: string, context = '', test 
       ],
       temperature: test ? 0 : 0.55,
       max_tokens: test ? 80 : 1200,
+      ...(test ? { reasoning: { effort: 'none' as const } } : {}),
     }, { signal: AbortSignal.timeout(30000) });
     const answer = response.choices?.[0]?.message?.content?.trim() ?? '';
     return { answer, connection: connectedResult(answer) };
@@ -22,6 +23,6 @@ export async function generateCacadorAnswer(message: string, context = '', test 
       const code = status === 401 ? 'configuration' : status === 403 ? 'denied' : status === 402 ? 'credits' : status === 429 ? 'quota' : error.code === 'timeout' || error.code === 'cancelled' ? 'timeout' : 'unavailable';
       return { answer: '', connection: failedConnection(code) };
     }
-    return { answer: '', connection: failedConnection(error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError') ? 'timeout' : 'unavailable') };
+    return { answer: '', connection: failedConnection((error instanceof Error || error instanceof DOMException) && (error.name === 'TimeoutError' || error.name === 'AbortError') ? 'timeout' : 'unavailable') };
   }
 }
