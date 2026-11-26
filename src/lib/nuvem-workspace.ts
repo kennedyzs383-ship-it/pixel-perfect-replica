@@ -44,6 +44,9 @@ export function createSite(name: string): NuvemSite {
 
 export function removeSite(id: string) {
   saveSites(getSites().filter((site) => site.id !== id));
+  const drafts = read<Record<string, unknown>>(EDITOR_KEY, {});
+  delete drafts[id];
+  window.localStorage.setItem(EDITOR_KEY, JSON.stringify(drafts));
 }
 
 export function updateSite(id: string, patch: Partial<NuvemSite>) {
