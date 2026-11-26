@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { getEditorDraft, saveEditorDraft, updateSite } from "../lib/nuvem-workspace";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Eye, Globe2, ImagePlus, LayoutTemplate,
@@ -34,20 +35,21 @@ function VisualEditor() {
   const [siteTitle, setSiteTitle] = useState("O meu website");
   const [accent, setAccent] = useState("#6842dc");
   const [saved, setSaved] = useState(false);
+  const [siteId, setSiteId] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [preview, setPreview] = useState(false);
   const active = blocks.find((b) => b.id === selected) ?? blocks[0];
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("nuvem-editor-v1");
-      if (raw) {
-        const data = JSON.parse(raw) as { blocks?: Block[]; siteTitle?: string; accent?: string };
-        if (data.blocks?.length) setBlocks(data.blocks);
-        if (data.siteTitle) setSiteTitle(data.siteTitle);
-        if (data.accent) setAccent(data.accent);
-      }
-    } catch { /* ignore invalid local draft */ }
+    const params = new URLSearchParams(window.location.search);
+    const currentSiteId = params.get("site");
+    setSiteId(currentSiteId);
+    const data = getEditorDraft<{ blocks?: Block[]; siteTitle?: string; accent?: string; siteId?: string }>();
+    if (data && (!currentSiteId || data.siteId === currentSiteId)) {
+      if (data.blocks?.length) setBlocks(data.blocks);
+      if (data.siteTitle) setSiteTitle(data.siteTitle);
+      if (data.accent) setAccent(data.accent);
+    }
   }, []);
 
   const update = (patch: Partial<Block>) => setBlocks((old) => old.map((b) => b.id === selected ? { ...b, ...patch } : b));
@@ -71,7 +73,8 @@ function VisualEditor() {
     return copy;
   });
   const save = () => {
-    localStorage.setItem("nuvem-editor-v1", JSON.stringify({ blocks, siteTitle, accent }));
+    saveEditorDraft({ blocks, siteTitle, accent, siteId });
+    if (siteId) updateSite(siteId, { name: siteTitle, status: "Rascunho" });
     setSaved(true); window.setTimeout(() => setSaved(false), 2200);
   };
   const exportHtml = () => {
@@ -83,6 +86,7 @@ function VisualEditor() {
       return `<section><h2>${escapeHtml(b.title)}</h2><p>${escapeHtml(b.body)}</p></section>`;
     }).join("\\n");
     const html = `<!doctype html><html lang="pt"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(siteTitle)}</title><style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif;color:#242331}header{padding:100px max(8%,calc((100% - 1100px)/2));background:#f3efff}header h1{font-size:clamp(38px,6vw,68px);max-width:800px}header p,section p{line-height:1.8;color:#696878;max-width:720px}header a{display:inline-block;background:${accent};color:#fff;padding:14px 22px;border-radius:9px;text-decoration:none}section{padding:65px max(8%,calc((100% - 1100px)/2))}section h2{font-size:32px}.features{display:flex;gap:14px;flex-wrap:wrap}.features article{padding:24px;background:#f5f4fa;border-radius:12px;flex:1}</style><body>${body}</body></html>`;
+    if (siteId) updateSite(siteId, { name: siteTitle, status: "Exportado", html });
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "website-nuvem.html"; a.click(); URL.revokeObjectURL(url);
   };
