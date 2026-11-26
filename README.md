@@ -15,15 +15,20 @@ A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de do
 - Rascunhos independentes por website, guardados no armazenamento local do navegador.
 - Exportação de cada website como ficheiro HTML estático.
 - Preferências de cor e notificações guardadas localmente.
+- Área Caçador para registo e gestão manual de empresas e oportunidades.
+- CRM do Caçador com pipeline comercial, conversas internas/notas e tarefas.
 - Verificações automáticas de testes e build através do GitHub Actions.
 
 ## Limites importantes
 
-- Os dados de projetos e os rascunhos ficam no navegador/dispositivo onde foram criados. Limpar os dados do navegador pode apagá-los.
+- Os dados de projetos e os rascunhos do construtor ficam no navegador/dispositivo onde foram criados. Limpar os dados do navegador pode apagá-los.
 - Exportar HTML cria um ficheiro para publicação noutro serviço; não publica o website na internet.
-- Supabase está ativo e a integração do Caçador usa Auth + Data API na tabela pública leads, com RLS por proprietário. A ligação exige as variáveis públicas indicadas em .env.example; sem elas, o Caçador mantém o modo local. O restante painel e os projetos de websites continuam em armazenamento local.
+- Supabase está integrado no Caçador para autenticação e sincronização dos registos de empresas, conversas, notas internas e tarefas. A ligação exige as variáveis públicas indicadas em .env.example; sem elas, o Caçador mantém o modo local.
+- O restante painel e os projetos de websites continuam em armazenamento local.
 - Alojamento e publicação gratuitos ainda não estão ligados.
-- A integração do Caçador utiliza o Supabase Auth existente e não altera as definições globais de autenticação. A chave service_role nunca deve ser colocada no frontend.
+- O Caçador está em modo assistido/manual: ainda não faz descoberta automática de empresas, análise automática de websites, chamadas de voz, nem conversas autónomas com IA. As notas internas não são mensagens enviadas ao cliente.
+- Não existe compra de domínios dentro da plataforma. A publicação futura deverá respeitar a regra de usar apenas opções gratuitas e não exigir cartão ou subscrição.
+- A chave service_role e qualquer secret key nunca devem ser colocadas no frontend.
 
 ## Ligar o Caçador ao Supabase
 
@@ -33,9 +38,9 @@ A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de do
 4. Nunca uses service_role nem uma secret key no frontend.
 5. Abre /cacador, cria uma conta ou inicia sessão. Se a confirmação de email estiver ativa, confirma o email antes de iniciar sessão.
 
-A área Caçador sincroniza empresas com public.leads. Os dados são filtrados pelas políticas RLS existentes, que verificam auth.uid() = owner_id. Os registos locais antigos são migrados apenas para a primeira conta que os reclamar neste dispositivo; as cópias locais das outras contas ficam separadas.
+A área Caçador sincroniza empresas com public.leads e utiliza as tabelas public.conversations, public.messages e public.tasks para conversas, notas internas e tarefas. As políticas RLS restringem os registos ao respetivo proprietário. Os registos locais antigos são migrados apenas para a primeira conta que os reclamar neste dispositivo; as cópias locais das outras contas ficam separadas.
 
-A integração atual cobre o CRM de empresas. Conversas, mensagens, tarefas, projetos de clientes, IA, pesquisa automática e chamadas ainda não estão ligados.
+**Importante:** conversas e notas são registos internos do CRM. Não enviam mensagens por WhatsApp, email ou voz. A abertura do WhatsApp é manual e depende do telefone público registado.
 
 ## Executar localmente
 
