@@ -60,11 +60,7 @@ function CacadorPage() {
       localStorage.removeItem(KEY);
     }
     const remote = await loadCloudLeads();
-    const localOnly = local.filter((item) => !remote.some((savedLead) =>
-      savedLead.id === item.id ||
-      (savedLead.company.trim().toLowerCase() === item.company.trim().toLowerCase() &&
-        savedLead.city.trim().toLowerCase() === item.city.trim().toLowerCase())
-    ));
+    const localOnly = local.filter((item) => !remote.some((savedLead) => savedLead.id === item.id));
     if (localOnly.length) await saveCloudLeads(localOnly as CacadorCloudLead[], account.id);
     const merged = [...localOnly, ...remote];
     setUser(account);
@@ -224,7 +220,7 @@ function CacadorPage() {
         <div className="actions"><button className="secondary" onClick={()=>searchWeb(current)}><Search size={15}/> Pesquisar empresa</button>{current.website && <button className="secondary" onClick={()=>window.open(current.website.startsWith("http")?current.website:"https://"+current.website,"_blank","noopener,noreferrer")}><Globe2 size={15}/> Abrir website</button>}{current.publicPhone && <button className="whatsapp" onClick={()=>openWhatsApp(current)}><MessageCircle size={15}/> Abrir WhatsApp</button>}<button className="danger" onClick={()=>remove(current.id)}><Trash2 size={15}/> Eliminar</button></div>
         <div className="script"><ClipboardList size={17}/><div><b>Orientação comercial</b><p>Apresenta-te com transparência, confirma se estás a falar com a pessoa responsável, pergunta se é um bom momento e se aceita conversar. Se não houver interesse, respeita a decisão e regista-a.</p></div></div>
       </section>}
-      <footer>Caçador · Nuvem <span>{saved ? "Alterações guardadas" : "Dados guardados neste dispositivo"}</span></footer>
+      <footer>Caçador · Nuvem <span>{saved ? "Alterações guardadas" : user ? "Sincronizado com a tua conta" : "Dados guardados neste dispositivo"}</span></footer>
     </main>
     {showForm && <div className="modal-bg" onClick={()=>setShowForm(false)}><form className="modal" onSubmit={e=>{e.preventDefault();add();}} onClick={e=>e.stopPropagation()}><button type="button" className="close" onClick={()=>setShowForm(false)}><X size={18}/></button><div className="eyebrow">NOVA OPORTUNIDADE</div><h2>Registar empresa</h2><p>Começa com os dados públicos que já conheces. Podes completar a investigação depois.</p><label>Nome da empresa *<input required autoFocus value={draft.company} onChange={e=>setDraft({...draft,company:e.target.value})} placeholder="Ex.: Empresa ABC"/></label><label>Setor de atividade<input value={draft.category} onChange={e=>setDraft({...draft,category:e.target.value})} placeholder="Ex.: Restaurante, clínica..."/></label><label>Cidade / localização<input value={draft.city} onChange={e=>setDraft({...draft,city:e.target.value})} placeholder="Ex.: Luanda"/></label><label>Website (se conhecido)<input value={draft.website} onChange={e=>setDraft({...draft,website:e.target.value})} placeholder="https://..."/></label><label>Telefone público<input value={draft.publicPhone} onChange={e=>setDraft({...draft,publicPhone:e.target.value})} placeholder="+244..."/></label><div className="modal-actions"><button type="button" className="secondary" onClick={()=>setShowForm(false)}>Cancelar</button><button type="submit" className="primary"><Save size={15}/> Guardar empresa</button></div></form></div>}
   </div>;
