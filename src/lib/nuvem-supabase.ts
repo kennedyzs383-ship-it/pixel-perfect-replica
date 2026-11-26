@@ -174,7 +174,7 @@ export async function signOut() {
 
 const statusToDb: Record<CacadorCloudLead["status"], string> = {
   "Novo": "new",
-  "Investigação": "qualified",
+  "Investigação": "investigating",
   "Qualificado": "qualified",
   "Contactado": "contacted",
   "Em negociação": "proposal",
@@ -183,6 +183,7 @@ const statusToDb: Record<CacadorCloudLead["status"], string> = {
 };
 const statusFromDb: Record<string, CacadorCloudLead["status"]> = {
   new: "Novo",
+  investigating: "Investigação",
   qualified: "Qualificado",
   contacted: "Contactado",
   replied: "Contactado",
