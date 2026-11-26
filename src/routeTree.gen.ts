@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EditorRouteImport } from './routes/editor'
+import { Route as CacadorRouteImport } from './routes/cacador'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,10 +23,16 @@ const EditorRoute = EditorRouteImport.update({
   path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CacadorRoute = CacadorRouteImport.update({
+  id: '/cacador',
+  path: '/cacador',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/editor': typeof EditorRoute
+  '/cacador': typeof CacadorRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -47,6 +54,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EditorRoute: typeof EditorRoute
+  CacadorRoute: typeof CacadorRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +73,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cacador': {
+      id: '/cacador'
+      path: '/cacador'
+      fullPath: '/cacador'
+      preLoaderRoute: typeof CacadorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EditorRoute: EditorRoute,
+  CacadorRoute: CacadorRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
