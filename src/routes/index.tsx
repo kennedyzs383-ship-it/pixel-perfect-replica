@@ -34,6 +34,16 @@ function HostingDashboard() {
   const [accent, setAccent] = useState("#673de6");
   const [notifications, setNotifications] = useState(true);
   useEffect(() => {
+    const savedAccent = window.localStorage.getItem("nuvem-accent");
+    const savedNotifications = window.localStorage.getItem("nuvem-notifications");
+    if (savedAccent) setAccent(savedAccent);
+    if (savedNotifications !== null) setNotifications(savedNotifications === "true");
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("nuvem-accent", accent);
+    window.localStorage.setItem("nuvem-notifications", String(notifications));
+  }, [accent, notifications]);
+  useEffect(() => {
     const refresh = () => setSites(getSites());
     refresh();
     window.addEventListener("nuvem-sites-updated", refresh);
