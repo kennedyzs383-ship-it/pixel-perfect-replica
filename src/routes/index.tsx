@@ -7,7 +7,19 @@ import {
   Settings2, ShieldCheck, Sparkles, Users, WandSparkles, X, Zap
 } from "lucide-react";
 
-export const Route = createFileRoute("/")({ component: HostingDashboard });
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Nuvem | Painel de websites" },
+      { name: "description", content: "Gere os teus websites e o teu espaço de trabalho na Nuvem." },
+      { property: "og:title", content: "Nuvem | Painel de websites" },
+      { property: "og:description", content: "Gere os teus websites e o teu espaço de trabalho na Nuvem." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: HostingDashboard,
+});
 
 type Site = { name: string; domain: string; status: "Online" | "A configurar"; updated: string };
 
@@ -60,7 +72,7 @@ function HostingDashboard() {
           {active === "Visão geral" ? <>
             <section className="promo-banner"><div className="promo-copy"><div className="promo-tag"><WandSparkles size={13}/> CONSTRUTOR COM IA</div><h2>A tua próxima ideia merece<br/>um lugar na internet.</h2><p>Cria um website profissional em minutos. Descreve a tua ideia e deixa a Nuvem fazer o resto.</p><button onClick={() => { window.location.href = "/editor"; }}>Abrir construtor visual <ArrowRight size={16}/></button></div><div className="promo-art"><div className="art-orbit orbit-one"/><div className="art-orbit orbit-two"/><div className="art-window"><div className="art-window-top"><i/><i/><i/><span>o-teu-site.ao</span></div><div className="art-window-body"><div className="art-mini-label">DESCOBRE O EXTRAORDINÁRIO</div><div className="art-mini-title">A tua marca.<br/>O teu mundo.</div><div className="art-mini-button"/></div></div><div className="floating-star"><Sparkles size={22}/></div><div className="floating-check"><Check size={17}/></div></div></section>
             <div className="section-heading"><div><h2>O teu espaço em números</h2><p>Acompanha os recursos e o desempenho.</p></div><button className="text-button" onClick={() => setActive("Hospedagem")}>Ver detalhes <ArrowRight size={15}/></button></div>
-            <div className="stats-grid"><Stat icon={<Globe2 size={19}/>} label="Websites" value={String(totalSites).padStart(2,"0")} note="1 em configuração" trend="+1 este mês"/><Stat icon={<HardDrive size={19}/>} label="Armazenamento" value="24.8 GB" note="de 100 GB utilizados" progress={25}/><Stat icon={<Activity size={19}/>} label="Disponibilidade" value="99,9%" note="Últimos 30 dias" trend="Excelente"/><Stat icon={<ShieldCheck size={19}/>} label="Proteção SSL" value="Ativa" note="Certificados protegidos" trend="Todos seguros"/>}</div>
+            <div className="stats-grid"><Stat icon={<Globe2 size={19}/>} label="Websites" value={String(totalSites).padStart(2,"0")} note="1 em configuração" trend="+1 este mês"/><Stat icon={<HardDrive size={19}/>} label="Armazenamento" value="24.8 GB" note="de 100 GB utilizados" progress={25}/><Stat icon={<Activity size={19}/>} label="Disponibilidade" value="99,9%" note="Últimos 30 dias" trend="Excelente"/><Stat icon={<ShieldCheck size={19}/>} label="Proteção SSL" value="Ativa" note="Certificados protegidos" trend="Todos seguros"/></div>
             <div className="section-heading sites-heading"><div><h2>Os teus websites</h2><p>Gere os teus projetos num só lugar.</p></div><button className="text-button" onClick={() => setActive("Websites")}>Ver todos <ArrowRight size={15}/></button></div>
             <div className="sites-card"><div className="table-head"><span>WEBSITE</span><span>ESTADO</span><span>ÚLTIMA ATIVIDADE</span><span/></div>{sites.slice(0,3).map((site) => <div className="site-row" key={site.domain}><div className="site-identity"><div className="site-icon"><Globe2 size={19}/></div><div><strong>{site.name}</strong><span>{site.domain}</span></div></div><div><span className={`status ${site.status === "Online" ? "online" : "pending"}`}><i/>{site.status}</span></div><span className="updated">{site.updated}</span><button className="row-action" onClick={() => setShowCustomizer(true)}>Gerir <ArrowRight size={14}/></button></div>)}<button className="add-site-row" onClick={() => setShowCreate(true)}><Plus size={16}/> Adicionar website</button></div>
             <div className="bottom-grid"><div className="bottom-card"><div className="bottom-card-icon purple"><Zap size={18}/></div><div><strong>Desempenho rápido</strong><p>O teu espaço está otimizado para oferecer uma experiência rápida aos visitantes.</p><span className="inline-good"><Check size={13}/> Tudo a funcionar</span></div></div><div className="bottom-card"><div className="bottom-card-icon green"><LockKeyhole size={18}/></div><div><strong>A tua segurança importa</strong><p>Proteção SSL e monitorização ativa para os teus websites.</p><span className="inline-good"><ShieldCheck size={13}/> Proteção ativa</span></div></div></div>

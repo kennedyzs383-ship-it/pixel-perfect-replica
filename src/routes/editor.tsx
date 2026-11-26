@@ -6,7 +6,19 @@ import {
   Settings2, Palette, MousePointer2, Check, ExternalLink
 } from "lucide-react";
 
-export const Route = createFileRoute("/editor")({ component: VisualEditor });
+export const Route = createFileRoute("/editor")({
+  head: () => ({
+    meta: [
+      { title: "Nuvem | Construtor visual" },
+      { name: "description", content: "Edita, pré-visualiza e exporta o teu website no construtor visual Nuvem." },
+      { property: "og:title", content: "Nuvem | Construtor visual" },
+      { property: "og:description", content: "Edita, pré-visualiza e exporta o teu website no construtor visual Nuvem." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: VisualEditor,
+});
 
 type Block = { id: string; type: "hero" | "text" | "button" | "image" | "features"; title: string; body: string; label?: string; image?: string; };
 const starter: Block[] = [
@@ -50,7 +62,13 @@ function VisualEditor() {
     const index = old.findIndex((b) => b.id === selected);
     const next = index + direction;
     if (index < 0 || next < 0 || next >= old.length) return old;
-    const copy = [...old]; [copy[index], copy[next]] = [copy[next], copy[index]]; return copy;
+    const currentBlock = old[index];
+    const nextBlock = old[next];
+    if (!currentBlock || !nextBlock) return old;
+    const copy = [...old];
+    copy[index] = nextBlock;
+    copy[next] = currentBlock;
+    return copy;
   });
   const save = () => {
     localStorage.setItem("nuvem-editor-v1", JSON.stringify({ blocks, siteTitle, accent }));
