@@ -57,6 +57,7 @@ function CacadorPage() {
       local = readLeads();
       if (local.length) localStorage.setItem(scopedKey, JSON.stringify(local));
       localStorage.setItem(KEY + ":owner", account.id);
+      localStorage.removeItem(KEY);
     }
     const remote = await loadCloudLeads();
     const localOnly = local.filter((item) => !remote.some((savedLead) =>
@@ -127,6 +128,8 @@ function CacadorPage() {
     if (user) localStorage.setItem(KEY + ":" + user.id, JSON.stringify(leads));
     await signOut();
     setUser(null);
+    setLeads([]);
+    setSelected(null);
     setCloudMessage("Sessão terminada. Os registos desta conta continuam guardados neste dispositivo.");
   };
   const visible = useMemo(() => leads.filter((lead) => (filter === "Todos" || lead.status === filter) && [lead.company, lead.category, lead.city, lead.contactName].join(" ").toLowerCase().includes(query.toLowerCase())), [leads, filter, query]);
