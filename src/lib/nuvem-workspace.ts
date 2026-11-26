@@ -7,7 +7,7 @@ export type NuvemSite = {
 };
 
 const SITES_KEY = "nuvem-sites-v1";
-const EDITOR_KEY = "nuvem-editor-v1";
+const EDITOR_KEY = "nuvem-editor-drafts-v1";
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -52,11 +52,14 @@ export function updateSite(id: string, patch: Partial<NuvemSite>) {
   ));
 }
 
-export function getEditorDraft<T>(): T | null {
-  return read<T | null>(EDITOR_KEY, null);
+export function getEditorDraft<T>(siteId: string | null = null): T | null {
+  const drafts = read<Record<string, T>>(EDITOR_KEY, {});
+  return drafts[siteId ?? "default"] ?? null;
 }
 
-export function saveEditorDraft<T>(draft: T) {
+export function saveEditorDraft<T>(draft: T, siteId: string | null = null) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(EDITOR_KEY, JSON.stringify(draft));
+  const drafts = read<Record<string, T>>(EDITOR_KEY, {});
+  drafts[siteId ?? "default"] = draft;
+  window.localStorage.setItem(EDITOR_KEY, JSON.stringify(drafts));
 }
