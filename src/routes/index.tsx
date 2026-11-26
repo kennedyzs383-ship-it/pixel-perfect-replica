@@ -5,7 +5,7 @@ import {
   Activity, ArrowRight, ArrowUpRight, Bell, Check, ChevronDown,
   ChevronRight, Cloud,  Database, Globe2, HardDrive,
   LayoutDashboard, LifeBuoy, LockKeyhole, Menu, MoreHorizontal, Plus, Search,
-  Settings2, ShieldCheck, Sparkles, Users, WandSparkles, X, Zap, Trash2
+  Settings2, ShieldCheck, Sparkles, Users, WandSparkles, X, Zap, Trash2, Target
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -53,7 +53,7 @@ function HostingDashboard() {
   const nav = [
     { title: "GESTÃO", items: [{ label: "Visão geral", icon: LayoutDashboard }, { label: "Websites", icon: Globe2, count: String(sites.length) }, { label: "Domínios", icon: Globe2 }, { label: "Email profissional", icon: Users }] },
     { title: "INFRAESTRUTURA", items: [{ label: "Hospedagem", icon: Cloud }, { label: "Bases de dados", icon: Database }, { label: "Segurança", icon: ShieldCheck }] },
-    { title: "FERRAMENTAS", items: [{ label: "Construtor visual", icon: WandSparkles }, { label: "Definições", icon: Settings2 }] },
+    { title: "FERRAMENTAS", items: [{ label: "Construtor visual", icon: WandSparkles }, { label: "Caçador", icon: Target }, { label: "Definições", icon: Settings2 }] },
   ];
   const pageTitle = active === "Visão geral" ? "Visão geral" : active;
   const totalSites = sites.length;
@@ -67,7 +67,7 @@ function HostingDashboard() {
     window.location.href = "/editor?site=" + encodeURIComponent(site.id);
   };
   const colors = ["#673de6", "#0d9488", "#2563eb", "#db2777", "#ea580c"];
-  const navContent = <>{nav.map((group) => <div className="nav-group" key={group.title}><div className="nav-caption">{group.title}</div>{group.items.map((item) => { const Icon = item.icon; return <button key={item.label} onClick={() => { if (item.label === "Construtor visual") { window.location.href = "/editor"; return; } setActive(item.label); setMobileMenu(false); }} className={`nav-item ${active === item.label ? "selected" : ""}`}><Icon size={18}/><span>{item.label}</span>{item.count && <small>{item.count}</small>}</button>; })}</div>)}</>;
+  const navContent = <>{nav.map((group) => <div className="nav-group" key={group.title}><div className="nav-caption">{group.title}</div>{group.items.map((item) => { const Icon = item.icon; return <button key={item.label} onClick={() => { if (item.label === "Construtor visual") { window.location.href = "/editor"; return; } if (item.label === "Caçador") { window.location.href = "/cacador"; return; } setActive(item.label); setMobileMenu(false); }} className={`nav-item ${active === item.label ? "selected" : ""}`}><Icon size={18}/><span>{item.label}</span>{item.count && <small>{item.count}</small>}</button>; })}</div>)}</>;
 
   return (
     <div className="app-shell" style={{ "--accent": accent } as React.CSSProperties}>
