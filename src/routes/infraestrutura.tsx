@@ -2,7 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpRight, CircleDashed, Cloud, Database, Globe2, LockKeyhole, Server, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/infraestrutura")({
-  head: () => ({ meta: [{ title: "Infraestrutura gratuita | Nuvem" }, { name: "description", content: "Infraestrutura gratuita e privada da Nuvem." }] }),
+  head: () => ({ meta: [
+    { title: "Infraestrutura gratuita | Nuvem" },
+    { name: "description", content: "Infraestrutura gratuita e privada da Nuvem." },
+    { property: "og:title", content: "Infraestrutura gratuita | Nuvem" },
+    { property: "og:description", content: "Infraestrutura gratuita e privada da Nuvem." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ] }),
   component: InfrastructurePage,
 });
 
