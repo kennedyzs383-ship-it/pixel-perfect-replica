@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as CacadorRouteImport } from './routes/cacador'
+import { Route as InfraestruturaRouteImport } from './routes/infraestrutura'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,11 +29,19 @@ const CacadorRoute = CacadorRouteImport.update({
   path: '/cacador',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InfraestruturaRoute = InfraestruturaRouteImport.update({
+  id: '/infraestrutura',
+  path: '/infraestrutura',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/editor': typeof EditorRoute
   '/cacador': typeof CacadorRoute
+  '/infraestrutura': typeof InfraestruturaRoute
+  '/infraestrutura': typeof InfraestruturaRoute
+  '/infraestrutura': typeof InfraestruturaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -47,16 +56,17 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/editor' | '/cacador'
+  fullPaths: '/' | '/editor' | '/cacador' | '/infraestrutura'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/editor' | '/cacador'
-  id: '__root__' | '/' | '/editor' | '/cacador'
+  to: '/' | '/editor' | '/cacador' | '/infraestrutura'
+  id: '__root__' | '/' | '/editor' | '/cacador' | '/infraestrutura'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EditorRoute: typeof EditorRoute
   CacadorRoute: typeof CacadorRoute
+  InfraestruturaRoute: typeof InfraestruturaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CacadorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/infraestrutura': {
+      id: '/infraestrutura'
+      path: '/infraestrutura'
+      fullPath: '/infraestrutura'
+      preLoaderRoute: typeof InfraestruturaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EditorRoute: EditorRoute,
   CacadorRoute: CacadorRoute,
+  InfraestruturaRoute: InfraestruturaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
