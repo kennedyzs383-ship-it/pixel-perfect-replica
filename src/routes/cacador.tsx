@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Building2, Search, Plus, ExternalLink, MessageCircle, ClipboardList, Target, Sparkles, ShieldCheck, Globe2, Trash2, X, Save, Filter, Download, Upload, Cloud, LogIn, LogOut, RefreshCw } from "lucide-react";
 import { deleteCloudLead, getSignedInUser, isSupabaseConfigured, loadCloudLeads, saveCloudLeads, signIn, signOut, signUp, type CacadorCloudLead } from "../lib/nuvem-supabase";
 
@@ -36,8 +36,88 @@ function CacadorPage() {
   const [draft, setDraft] = useState(emptyLead());
   const [selected, setSelected] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  useEffect(() => { setLeads(readLeads()); }, []);
-  const persist = (next: Lead[]) => { setLeads(next); localStorage.setItem(KEY, JSON.stringify(next)); setSaved(true); window.setTimeout(() => setSaved(false), 1800); };
+  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [cloudMessage, setCloudMessage] = useState("");
+  const cloudConfigured = isSupabaseConfigured();
+
+  const connectCloud = async (account: { id: string; email?: string }) => {
+    const local = readLeads();
+    const remote = await loadCloudLeads();
+    const localOnly = local.filter((item) => !remote.some((savedLead) =>
+      savedLead.id === item.id ||
+      (savedLead.company.trim().toLowerCase() === item.company.trim().toLowerCase() &&
+        savedLead.city.trim().toLowerCase() === item.city.trim().toLowerCase())
+    ));
+    if (localOnly.length) await saveCloudLeads(localOnly as CacadorCloudLead[], account.id);
+    const merged = [...localOnly, ...remote];
+    setUser(account);
+    setLeads(merged);
+    localStorage.setItem(KEY, JSON.stringify(merged));
+    setCloudMessage("Ligado à base de dados. Os registos estão sincronizados com a tua conta.");
+  };
+
+  useEffect(() => {
+    const local = readLeads();
+    setLeads(local);
+    if (!cloudConfigured) return;
+    let active = true;
+    void getSignedInUser().then(async (account) => {
+      if (!active || !account) return;
+      await connectCloud(account);
+    }).catch((error: unknown) => {
+      if (active) setCloudMessage(error instanceof Error ? error.message : "Não foi possível recuperar a sessão.");
+    });
+    return () => { active = false; };
+  }, []);
+
+  const persist = (next: Lead[]) => {
+    setLeads(next);
+    localStorage.setItem(KEY, JSON.stringify(next));
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
+    if (user) {
+      void saveCloudLeads(next as CacadorCloudLead[], user.id)
+        .then(() => setCloudMessage("Sincronizado com a base de dados."))
+        .catch((error: unknown) => setCloudMessage(error instanceof Error ? "Guardado localmente; sincronização pendente: " + error.message : "Guardado localmente; sincronização pendente."));
+    }
+  };
+
+  const handleAuth = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      if (authMode === "signup") {
+        const result = await signUp(authEmail.trim(), authPassword);
+        if (!result.hasSession || !result.user) {
+          setCloudMessage("Conta criada. Confirma o endereço de email e depois inicia sessão.");
+          setAuthMode("signin");
+          return;
+        }
+        await connectCloud(result.user);
+      } else {
+        const account = await signIn(authEmail.trim(), authPassword);
+        await connectCloud(account);
+      }
+      setAuthPassword("");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Não foi possível autenticar.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    localStorage.setItem(KEY, JSON.stringify(leads));
+    await signOut();
+    setUser(null);
+    setCloudMessage("Sessão terminada. Os registos deste dispositivo continuam guardados localmente.");
+  };
   const visible = useMemo(() => leads.filter((lead) => (filter === "Todos" || lead.status === filter) && [lead.company, lead.category, lead.city, lead.contactName].join(" ").toLowerCase().includes(query.toLowerCase())), [leads, filter, query]);
   const current = leads.find((lead) => lead.id === selected) ?? null;
   const patch = (id: string, changes: Partial<Lead>) => persist(leads.map((lead) => lead.id === id ? { ...lead, ...changes } : lead));
