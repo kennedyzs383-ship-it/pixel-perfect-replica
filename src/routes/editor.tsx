@@ -45,7 +45,11 @@ function VisualEditor() {
     const currentSiteId = params.get("site");
     setSiteId(currentSiteId);
     const data = getEditorDraft<{ blocks?: Block[]; siteTitle?: string; accent?: string; siteId?: string }>(currentSiteId);
-    if (!data && currentSiteId) {\n      const site = getSites().find((item) => item.id === currentSiteId);\n      if (site?.name) setSiteTitle(site.name);\n    }\n    if (data && (!currentSiteId || data.siteId === currentSiteId)) {
+    if (!data && currentSiteId) {
+      const site = getSites().find((item) => item.id === currentSiteId);
+      if (site?.name) setSiteTitle(site.name);
+    }
+    if (data && (!currentSiteId || data.siteId === currentSiteId)) {
       if (data.blocks?.length) setBlocks(data.blocks);
       if (data.siteTitle) setSiteTitle(data.siteTitle);
       if (data.accent) setAccent(data.accent);
@@ -84,9 +88,11 @@ function VisualEditor() {
       if (b.type === "features") return `<section><h2>${escapeHtml(b.title)}</h2><p>${escapeHtml(b.body)}</p><div class="features"><article>Qualidade</article><article>Confiança</article><article>Suporte</article></div></section>`;
       if (b.type === "hero") return `<header><p>O TEU PRÓXIMO CAPÍTULO COMEÇA AQUI</p><h1>${escapeHtml(b.title)}</h1><p>${escapeHtml(b.body)}</p><a href="#">${escapeHtml(b.label || "Saber mais")}</a></header>`;
       return `<section><h2>${escapeHtml(b.title)}</h2><p>${escapeHtml(b.body)}</p></section>`;
-    }).join("\\n");
+    }).join("\
+");
     const html = `<!doctype html><html lang="pt"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(siteTitle)}</title><style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif;color:#242331}header{padding:100px max(8%,calc((100% - 1100px)/2));background:#f3efff}header h1{font-size:clamp(38px,6vw,68px);max-width:800px}header p,section p{line-height:1.8;color:#696878;max-width:720px}header a{display:inline-block;background:${accent};color:#fff;padding:14px 22px;border-radius:9px;text-decoration:none}section{padding:65px max(8%,calc((100% - 1100px)/2))}section h2{font-size:32px}.features{display:flex;gap:14px;flex-wrap:wrap}.features article{padding:24px;background:#f5f4fa;border-radius:12px;flex:1}</style><body>${body}</body></html>`;
-    saveEditorDraft({ blocks, siteTitle, accent, siteId }, siteId);\n    if (siteId) updateSite(siteId, { name: siteTitle, status: "Exportado", html });
+    saveEditorDraft({ blocks, siteTitle, accent, siteId }, siteId);
+    if (siteId) updateSite(siteId, { name: siteTitle, status: "Exportado", html });
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "website-nuvem.html"; a.click(); URL.revokeObjectURL(url);
   };
