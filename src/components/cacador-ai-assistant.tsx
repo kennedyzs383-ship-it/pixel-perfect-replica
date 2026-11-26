@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useCacadorConnection } from "@/hooks/use-cacador-connection";
+import { failedConnection } from "@/lib/cacador-connection";
+import { Button } from "@/components/ui/button";
 import { askCacadorAI } from "../lib/cacador-ai.functions";
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandSparkles } from "lucide-react";
 
@@ -21,6 +25,8 @@ type SpeechWindow = Window & {
 };
 
 export function CacadorAIAssistant() {
+  const ask = useServerFn(askCacadorAI);
+  const { connection, setConnection, checking, check } = useCacadorConnection();
   const [messages, setMessages] = useState<ChatLine[]>([
     { role: "assistant", text: "Olá! Sou o Caçador. Posso ajudar-te a analisar oportunidades, preparar abordagens comerciais e planear websites. Escreve ou usa o microfone para falar comigo." }
   ]);
@@ -97,12 +103,21 @@ export function CacadorAIAssistant() {
     setBusy(true);
     setAiError("");
     try {
-      const context = next.slice(-8).map((line) => (line.role === "user" ? "Utilizador: " : "Caçador: ") + line.text).join("\n");
-      const result = await askCacadorAI({ data: { message, context } });
+      const context = next.slice(0, -1).slice(-8).map((line) => (line.role === "user" ? "Utilizador: " : "Caçador: ") + line.text).join("\n").slice(-4000);
+      const result = await ask({ data: { message, context } });
+      setConnection(result.connection);
+      if (!result.connection.connected) {
+        setAiError(result.connection.message);
+        setInput(message);
+        return;
+      }
       setMessages((previous) => [...previous, { role: "assistant", text: result.answer }]);
       speak(result.answer);
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : "Não foi possível contactar o cérebro do Caçador.");
+      const failure = failedConnection('unavailable');
+      setConnection(failure);
+      setAiError(failure.message);
+      setInput(message);
     } finally {
       setBusy(false);
     }
@@ -111,10 +126,10 @@ export function CacadorAIAssistant() {
   return <section className="hunter-ai">
     <div className="hunter-ai-head">
       <div className="hunter-ai-icon"><Bot size={20}/></div>
-      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span><i/> Assistente conversacional · Gemini</span></div>
+      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{checking ? "A verificar…" : connection.connected ? "Ligado" : "Não ligado"} · Gemini via Lovable AI</span></div>
       <div className="hunter-ai-controls">
         <button type="button" className={speaking ? "ai-icon-btn active" : "ai-icon-btn"} onClick={() => { setSpeaking((value) => !value); if (speaking && "speechSynthesis" in window) window.speechSynthesis.cancel(); }} aria-label={speaking ? "Desativar voz" : "Ativar voz"} title={speaking ? "Desativar voz" : "Ativar voz"}>{speaking ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
-        <a className="ai-icon-btn" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" title="Configurar chave de IA"><ExternalLink size={15}/></a>
+        <Button variant="outline" size="icon" onClick={() => void check()} disabled={checking || busy} aria-label="Testar ligação" title="Testar ligação"><Sparkles size={15}/></Button>
       </div>
     </div>
     <div className="hunter-ai-intro"><Sparkles size={15}/> Fala naturalmente. O Caçador responde por texto e, quando a voz está ativa, também fala contigo.</div>
@@ -123,11 +138,12 @@ export function CacadorAIAssistant() {
       {busy && <div className="hunter-ai-message assistant"><span>CAÇADOR</span><p className="ai-thinking">A analisar o teu pedido…</p></div>}
       <div ref={bottom}/>
     </div>
-    {aiError && <p className="hunter-ai-error">{aiError}</p>}
+    {aiError && <p className="hunter-ai-error" role="alert">{aiError}</p>}
+    {connection.checkedAt && !checking && <p className="text-xs text-muted-foreground" role="status">{connection.message}</p>}
     {voiceError && <p className="hunter-ai-error">{voiceError}</p>}
     <form className="hunter-ai-compose" onSubmit={(event) => void send(event)}>
       <button type="button" className={listening ? "ai-mic-btn listening" : "ai-mic-btn"} onClick={toggleListening} aria-label={listening ? "Parar microfone" : "Falar com Caçador"} title={listening ? "Parar microfone" : "Falar com Caçador"}>{listening ? <MicOff size={17}/> : <Mic size={17}/>}</button>
-      <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ex.: prepara um website para uma clínica em Luanda…" aria-label="Mensagem para o Caçador"/>
+      <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ex.: prepara um website para uma clínica em Luanda…" maxLength={4000} aria-label="Mensagem para o Caçador"/>
       <button className="ai-send-btn" type="submit" disabled={busy || !input.trim()} aria-label="Enviar mensagem"><Send size={16}/></button>
     </form>
     <div className="hunter-ai-quick">

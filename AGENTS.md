@@ -28,3 +28,9 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+
+## Integration boundaries
+- Keep the legacy CRM account configuration separate from the managed AI backend, so provisioning Cloud cannot redirect existing CRM data or sessions to a different project.
+- Run Caçador inference and connection tests through the same server-only AI Gateway helper and validate the existing CRM or managed Cloud session before either call; this prevents unauthenticated use of project credits.
+- Keep API credentials in Lovable-managed Secrets only; the settings window displays safe connection results, never a credential-entry or credential-storage imitation.

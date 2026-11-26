@@ -3,6 +3,13 @@ import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/r
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 
+// Preserve the original CRM session alongside the generated Cloud session.
+const attachCacadorSession = createMiddleware({ type: "function" }).client(async ({ next }) => {
+  const { getCacadorAccessToken } = await import("./lib/nuvem-supabase");
+  const token = await getCacadorAccessToken();
+  return next({ headers: token ? { "x-nuvem-session": token } : {} });
+});
+
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
     return await next();
@@ -27,11 +34,11 @@ const csrfMiddleware = createCsrfMiddleware({
 
 // requestMiddleware runs on every request; functionMiddleware only on server functions, where
 // client sendContext is unvalidated input. Append to these arrays, never replace them.
-// Enabling Lovable Cloud adds functionMiddleware: [attachSupabaseAuth], the bearer token that
+// Enabling Lovable Cloud adds functionMiddleware: [attachSupabaseAuth, attachCacadorSession], the bearer token that
 // requireSupabaseAuth server functions need. Add it by hand only if Lovable Cloud or a
 // user-managed Supabase project is connected, no middleware here sets Authorization, and the
 // project did not intentionally replace it.
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
+  functionMiddleware: [attachSupabaseAuth, attachCacadorSession],
   requestMiddleware: [errorMiddleware, csrfMiddleware],
 }));

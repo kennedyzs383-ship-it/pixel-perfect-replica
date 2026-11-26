@@ -1,3 +1,4 @@
+import { legacyCrmConfig } from "./cacador-legacy-config";
 type SupabaseUser = { id: string; email?: string };
 type SupabaseSession = {
   access_token: string;
@@ -21,17 +22,14 @@ export type CacadorCloudLead = {
 };
 
 const SESSION_KEY = "nuvem-supabase-session-v1";
-const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, "");
-const publishableKey =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ||
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
+const { url, key: publishableKey } = legacyCrmConfig();
 
 export function isSupabaseConfigured() {
   return Boolean(url && publishableKey);
 }
 
 export function getSupabaseSetupMessage() {
-  return "Falta configurar VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY nas variáveis de ambiente da aplicação.";
+  return "Falta configurar a ligação original do CRM com VITE_CACADOR_SUPABASE_URL e VITE_CACADOR_SUPABASE_PUBLISHABLE_KEY.";
 }
 
 function getSession(): SupabaseSession | null {
@@ -50,20 +48,20 @@ function saveSession(session: SupabaseSession | null) {
 
 function normalizeSession(value: Record<string, unknown>): SupabaseSession | null {
   if (
-    typeof value.access_token !== "string" ||
-    typeof value.refresh_token !== "string" ||
-    !value.user ||
-    typeof value.user !== "object"
+    typeof value["access_token"] !== "string" ||
+    typeof value["refresh_token"] !== "string" ||
+    !value["user"] ||
+    typeof value["user"] !== "object"
   ) return null;
-  const user = value.user as SupabaseUser;
+  const user = value["user"] as SupabaseUser;
   if (typeof user.id !== "string") return null;
-  const expiresIn = typeof value.expires_in === "number" ? value.expires_in : 3600;
-  const expiresAt = typeof value.expires_at === "number"
-    ? value.expires_at
+  const expiresIn = typeof value["expires_in"] === "number" ? value["expires_in"] : 3600;
+  const expiresAt = typeof value["expires_at"] === "number"
+    ? value["expires_at"]
     : Math.floor(Date.now() / 1000) + expiresIn;
   return {
-    access_token: value.access_token,
-    refresh_token: value.refresh_token,
+    access_token: value["access_token"],
+    refresh_token: value["refresh_token"],
     expires_at: expiresAt,
     user,
   };
@@ -74,7 +72,7 @@ async function authFetch<T>(path: string, body?: unknown, method = "POST"): Prom
   const response = await fetch(url + "/auth/v1/" + path, {
     method,
     headers: {
-      apikey: publishableKey!,
+      apikey: publishableKey ?? "",
       "Content-Type": "application/json",
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -115,7 +113,7 @@ async function restFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url + "/rest/v1/" + path, {
     ...init,
     headers: {
-      apikey: publishableKey!,
+      apikey: publishableKey ?? "",
       Authorization: "Bearer " + session.access_token,
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
@@ -145,14 +143,14 @@ export async function signUp(email: string, password: string) {
   const result = await authFetch<Record<string, unknown>>("signup", { email, password });
   const session = normalizeSession(result);
   if (session) saveSession(session);
-  return { user: (result.user as SupabaseUser | undefined) ?? session?.user ?? null, hasSession: Boolean(session) };
+  return { user: (result["user"] as SupabaseUser | undefined) ?? session?.user ?? null, hasSession: Boolean(session) };
 }
 
 export async function getSignedInUser() {
   if (!isSupabaseConfigured() || !getSession()) return null;
   const session = await freshSession();
   const response = await fetch(url + "/auth/v1/user", {
-    headers: { apikey: publishableKey!, Authorization: "Bearer " + session.access_token },
+    headers: { apikey: publishableKey ?? "", Authorization: "Bearer " + session.access_token },
   });
   if (!response.ok) {
     saveSession(null);
@@ -166,7 +164,7 @@ export async function signOut() {
   if (current && isSupabaseConfigured()) {
     await fetch(url + "/auth/v1/logout", {
       method: "POST",
-      headers: { apikey: publishableKey!, Authorization: "Bearer " + current.access_token },
+      headers: { apikey: publishableKey ?? "", Authorization: "Bearer " + current.access_token },
     }).catch(() => undefined);
   }
   saveSession(null);
@@ -358,4 +356,9 @@ export async function updateCloudTaskStatus(taskId: string, status: CloudTask["s
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({ status }),
   });
+}
+
+export async function getCacadorAccessToken(): Promise<string | null> {
+  if (!isSupabaseConfigured() || !getSession()) return null;
+  try { return (await freshSession()).access_token; } catch { return null; }
 }

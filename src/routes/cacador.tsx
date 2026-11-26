@@ -8,6 +8,10 @@ export const Route = createFileRoute("/cacador")({
   head: () => ({ meta: [
     { title: "Nuvem | Caçador" },
     { name: "description", content: "Centro de prospeção e gestão comercial do Caçador." },
+    { property: "og:title", content: "Nuvem | Caçador" },
+    { property: "og:description", content: "Centro de prospeção e gestão comercial do Caçador." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
   ] }),
   component: CacadorPage,
 });
@@ -168,7 +172,7 @@ function CacadorPage() {
       const created = await createCloudConversation(current.id, user.id, conversationTitle.trim());
       setConversationTitle("");
       await refreshLeadWorkspace(current.id);
-      setSelectedConversation(created.id);
+      setSelectedConversation(created?.id ?? "");
     } catch (error) {
       setCloudMessage(error instanceof Error ? error.message : "Não foi possível criar o registo de conversa.");
     } finally { setWorkspaceBusy(false); }
