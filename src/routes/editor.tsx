@@ -44,7 +44,7 @@ function VisualEditor() {
     const params = new URLSearchParams(window.location.search);
     const currentSiteId = params.get("site");
     setSiteId(currentSiteId);
-    const data = getEditorDraft<{ blocks?: Block[]; siteTitle?: string; accent?: string; siteId?: string }>();
+    const data = getEditorDraft<{ blocks?: Block[]; siteTitle?: string; accent?: string; siteId?: string }>(currentSiteId);
     if (data && (!currentSiteId || data.siteId === currentSiteId)) {
       if (data.blocks?.length) setBlocks(data.blocks);
       if (data.siteTitle) setSiteTitle(data.siteTitle);
@@ -73,7 +73,7 @@ function VisualEditor() {
     return copy;
   });
   const save = () => {
-    saveEditorDraft({ blocks, siteTitle, accent, siteId });
+    saveEditorDraft({ blocks, siteTitle, accent, siteId }, siteId);
     if (siteId) updateSite(siteId, { name: siteTitle, status: "Rascunho" });
     setSaved(true); window.setTimeout(() => setSaved(false), 2200);
   };
