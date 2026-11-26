@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Check, ChevronDown,
-  ChevronRight, CircleHelp, Cloud, CreditCard, Database, Globe2, HardDrive,
+  Activity, ArrowRight, ArrowUpRight, Bell, Check, ChevronDown,
+  ChevronRight, Cloud, CreditCard, Database, Globe2, HardDrive,
   LayoutDashboard, LifeBuoy, LockKeyhole, Menu, MoreHorizontal, Plus, Search,
   Settings2, ShieldCheck, Sparkles, Users, WandSparkles, X, Zap
 } from "lucide-react";
