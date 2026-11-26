@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Eye, ImagePlus, LayoutTemplate,
   Monitor, Plus, Save, Smartphone, Trash2, Type, Download,
-  Settings2, Palette, MousePointer2, Check, ExternalLink
+  Settings2, Palette, MousePointer2, Check, ExternalLink, Copy
 } from "lucide-react";
 
 export const Route = createFileRoute("/editor")({
@@ -76,6 +76,17 @@ function VisualEditor() {
     copy[next] = currentBlock;
     return copy;
   });
+  const duplicate = () => {
+    if (!active) return;
+    const copy = { ...active, id: uid(), title: active.title + " (cópia)" };
+    setBlocks((old) => {
+      const index = old.findIndex((block) => block.id === selected);
+      const next = [...old];
+      next.splice(index + 1, 0, copy);
+      return next;
+    });
+    setSelected(copy.id);
+  };
   const save = () => {
     saveEditorDraft({ blocks, siteTitle, accent, siteId }, siteId);
     if (siteId) updateSite(siteId, { name: siteTitle, status: "Rascunho" });
@@ -150,9 +161,9 @@ function VisualEditor() {
             <label className="field-label">Título</label><input className="editor-input" value={active.title} onChange={(e) => update({title:e.target.value})}/>
             <label className="field-label">Texto</label><textarea className="editor-textarea" rows={5} value={active.body} onChange={(e) => update({body:e.target.value})}/>
             {(active.type === "hero" || active.type === "button") && <><label className="field-label">Texto do botão</label><input className="editor-input" value={active.label || ""} onChange={(e) => update({label:e.target.value})}/></>}
-            {active.type === "image" && <><label className="field-label">URL da imagem</label><input className="editor-input" placeholder="https://..." value={active.image || ""} onChange={(e) => update({image:e.target.value})}/></>}
+            {active.type === "image" && <><label className="field-label">URL da imagem</label><input className="editor-input" placeholder="https://..." value={active.image || ""} onChange={(e) => update({image:e.target.value})}/><label className="field-label">Ou carregar imagem do dispositivo</label><input className="editor-input" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => update({image:String(reader.result)}); reader.readAsDataURL(file); }}/></>}
             <div className="panel-divider"/>
-            <div className="inspector-actions"><button onClick={() => move(-1)} title="Mover para cima"><ArrowUp size={16}/> Subir</button><button onClick={() => move(1)} title="Mover para baixo"><ArrowDown size={16}/> Descer</button></div>
+            <div className="inspector-actions"><button onClick={() => move(-1)} title="Mover para cima"><ArrowUp size={16}/> Subir</button><button onClick={() => move(1)} title="Mover para baixo"><ArrowDown size={16}/> Descer</button><button onClick={duplicate} title="Duplicar secção"><Copy size={15}/> Duplicar</button></div>
             <button className="delete-block" onClick={() => { setBlocks((old) => old.filter((b) => b.id !== selected)); setSelected(blocks.find((b) => b.id !== selected)?.id || ""); }}><Trash2 size={15}/> Remover secção</button>
           </> : <p className="panel-hint">Seleciona uma secção na página para editar o seu conteúdo.</p>}
         </aside>}
