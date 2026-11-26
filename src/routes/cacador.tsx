@@ -152,7 +152,7 @@ function CacadorPage() {
       if (active) setCloudMessage(error instanceof Error ? "Erro ao carregar o acompanhamento: " + error.message : "Erro ao carregar o acompanhamento.");
     }).finally(() => { if (active) setWorkspaceBusy(false); });
     return () => { active = false; };
-  }, [user?.id, current?.id]);
+  }, [user?.id, selected]);
 
   const refreshLeadWorkspace = async (leadId: string) => {
     const data = await loadLeadWorkspace(leadId);
