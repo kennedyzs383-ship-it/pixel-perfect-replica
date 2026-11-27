@@ -53,3 +53,27 @@ Até lá, o estado correto é **A aguardar publicação e configuração OAuth**
 - Canva Quickstart: https://www.canva.dev/docs/apps/quickstart/
 - Access and permissions: https://www.canva.dev/docs/apps/mcp/access/
 - Canva MCP overview and integration guidance: https://www.canva.dev/blog/developers/canva-mcp-ga/
+
+
+## Nota técnica confirmada: cliente MCP com OAuth
+
+A implementação atual em `src/lib/cacador-mcp.server.ts` faz JSON-RPC diretamente e aceita apenas bearer token opcional. Isso não executa descoberta OAuth, PKCE, callback, troca de código ou renovação; portanto, não deve ser usado para autenticar o Canva.
+
+A documentação atual do MCP TypeScript SDK descreve o cliente Streamable HTTP com um `OAuthClientProvider`:
+
+- Criar um provider por utilizador autenticado, nunca partilhar o mesmo estado OAuth entre contas.
+- O provider persiste, por utilizador, os dados de cliente, tokens, verifier PKCE e estado de descoberta do issuer.
+- Fornecer as credenciais pré-registadas da aplicação Canva através de `clientInformation()` (Client ID e Client Secret do Developer Portal), em vez de assumir que o Canva permite registo dinâmico do cliente.
+- Usar `StreamableHTTPClientTransport` para `https://api.canva.com/connect/v1/mcp`, passando o provider em `authProvider`.
+- Quando o SDK devolver `UnauthorizedError`, redirecionar o utilizador para o URL de autorização que o provider recebeu.
+- No callback, validar o `state` guardado para a mesma sessão/utilizador antes de chamar `finishAuth(URLSearchParams)`. O SDK valida o parâmetro `iss` e efetua a troca do código; não mostrar `error_description` não confiável ao utilizador.
+- Reconectar com um transporte novo depois de concluir o callback.
+- Guardar tokens e estado temporário de forma durável e cifrada no servidor; nunca usar armazenamento local do browser nem memória de processo como armazenamento de produção.
+
+A biblioteca e a versão devem ser adicionadas ao projeto apenas depois de confirmar compatibilidade com o runtime de produção (Nitro/Cloudflare) e com o lockfile. O provider precisa de um adaptador de armazenamento compatível com esse runtime. Não copiar exemplos de armazenamento em memória para produção.
+
+**Fontes técnicas:** MCP TypeScript SDK — OAuth client flow: https://ts.sdk.modelcontextprotocol.io/v2/clients/oauth ; Canva Quickstart: https://www.canva.dev/docs/apps/quickstart/ ; Canva access and permissions: https://www.canva.dev/docs/apps/mcp/access/
+
+## Decisão de segurança
+
+Não adaptar `CACADOR_MCP_SERVERS_JSON` para guardar um token Canva global. A integração Canva deve ter um caminho OAuth dedicado e tokens separados por utilizador. A camada MCP genérica existente continua disponível para os outros servidores, sem alteração do comportamento atual.
