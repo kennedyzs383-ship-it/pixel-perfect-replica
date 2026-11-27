@@ -23,12 +23,12 @@ function configuredServers(): McpServerConfig[] {
   } catch { return []; }
 }
 
-async function rpc(config: McpServerConfig, method: string, params?: unknown, sessionId?: string, id = 1): Promise<{ payload: JsonRpcResponse; sessionId?: string }> {
+async function rpc(config: McpServerConfig, method: string, params?: unknown, sessionId?: string, id?: number): Promise<{ payload: JsonRpcResponse; sessionId?: string }> {
   const token = config.tokenEnv ? process.env[config.tokenEnv] : undefined;
   const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (sessionId) headers['Mcp-Session-Id'] = sessionId;
-  const response = await fetch(config.url, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ jsonrpc: '2.0', id, method, ...(params === undefined ? {} : { params }) }), signal: AbortSignal.timeout(15000) });
+  const response = await fetch(config.url, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, ...(params === undefined ? {} : { params }) }), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error(`Servidor MCP ${config.name}: HTTP ${response.status}.`);
   const nextSession = response.headers.get('Mcp-Session-Id') ?? sessionId;
   const body = await response.text();
@@ -45,7 +45,7 @@ async function rpc(config: McpServerConfig, method: string, params?: unknown, se
 
 async function withMcp<T>(config: McpServerConfig, work: (sessionId?: string) => Promise<T>): Promise<T> {
   const init = await rpc(config, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'nuvem-cacador', version: '1.0.0' } }, undefined, 1);
-  await rpc(config, 'notifications/initialized', undefined, init.sessionId, 0);
+  await rpc(config, 'notifications/initialized', undefined, init.sessionId);
   return work(init.sessionId);
 }
 
