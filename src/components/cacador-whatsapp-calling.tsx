@@ -44,6 +44,7 @@ export function CacadorWhatsAppCalling() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const speechDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const voiceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingVoiceSegmentsRef = useRef(0);
   const recordingActiveRef = useRef(false);
   const recordingTimerRef = useRef<number | null>(null);
   const activeSpeechSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
@@ -68,6 +69,7 @@ export function CacadorWhatsAppCalling() {
     audioContextRef.current = null;
     speechDestinationRef.current = null;
     voiceQueueRef.current = Promise.resolve();
+    pendingVoiceSegmentsRef.current = 0;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (audioRef.current) audioRef.current.srcObject = null;
@@ -113,9 +115,19 @@ export function CacadorWhatsAppCalling() {
     if (blob.size < 1200) return;
     const callPeer = peerRef.current;
     if (!callPeer) return;
+    // Bound the queue: old speech must not accumulate and be answered long
+    // after the customer has moved on. Keep at most two segments in flight.
+    if (pendingVoiceSegmentsRef.current >= 2) {
+      setStatus("A voz está a demorar. A descartar um segmento antigo para evitar respostas atrasadas…");
+      return;
+    }
+    pendingVoiceSegmentsRef.current += 1;
     // Keep capture independent from AI latency, while processing utterances in order.
     voiceQueueRef.current = voiceQueueRef.current.then(async () => {
-      if (peerRef.current !== callPeer) return;
+      if (peerRef.current !== callPeer) {
+        pendingVoiceSegmentsRef.current = Math.max(0, pendingVoiceSegmentsRef.current - 1);
+        return;
+      }
       try {
         const bytes = new Uint8Array(await blob.arrayBuffer());
         let binary = "";
@@ -130,6 +142,8 @@ export function CacadorWhatsAppCalling() {
         setStatus("Caçador respondeu por voz. À escuta do cliente…");
       } catch (error) {
         setStatus(error instanceof Error ? "Voz inteligente: " + error.message : "Não foi possível processar a voz do cliente.");
+      } finally {
+        pendingVoiceSegmentsRef.current = Math.max(0, pendingVoiceSegmentsRef.current - 1);
       }
     }).catch((error) => {
       setStatus(error instanceof Error ? error.message : "Falha na fila de processamento de voz.");
