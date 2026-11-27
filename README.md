@@ -26,7 +26,7 @@ A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de do
 - Supabase está integrado no Caçador para autenticação e sincronização dos registos de empresas, conversas, notas internas e tarefas. A ligação exige as variáveis públicas indicadas em .env.example; sem elas, o Caçador mantém o modo local.
 - O restante painel e os projetos de websites continuam em armazenamento local.
 - Alojamento e publicação gratuitos ainda não estão ligados.
-- O Caçador está em modo assistido/manual: ainda não faz descoberta automática de empresas, análise automática de websites, chamadas de voz, nem conversas autónomas com IA. As notas internas não são mensagens enviadas ao cliente.
+- O Caçador inclui um assistente conversacional ligado ao Z Router, com entrada de voz pelo microfone e leitura das respostas pelo navegador. A utilização do modelo depende da secret ZROUTER_API_KEY e de saldo/créditos disponíveis na conta Z Router. A prospeção web e a análise automática de websites ainda não estão implementadas. As notas internas não são mensagens enviadas ao cliente.
 - Não existe compra de domínios dentro da plataforma. A publicação futura deverá respeitar a regra de usar apenas opções gratuitas e não exigir cartão ou subscrição.
 - A chave service_role e qualquer secret key nunca devem ser colocadas no frontend.
 
