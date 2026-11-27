@@ -14,7 +14,7 @@ describe('Caçador MCP client', () => {
     fetchMock.mockResolvedValueOnce(Response.json({ jsonrpc: '2.0', id: 2, result: { tools: [{ name: 'search_docs', description: 'Pesquisa documentos' }, { name: 'delete_all', description: 'Not allowed' }] } }));
     const result = await listCacadorMcpTools();
     expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ id: 'whatsapp-meta', connected: true, tools: [{ name: 'get_connection_status' }, { name: 'send_text_message' }] });
+    expect(result[0]).toMatchObject({ id: 'whatsapp-meta', connected: true, tools: [{ name: 'get_connection_status' }, { name: 'get_call_settings' }, { name: 'get_call_permission_status' }, { name: 'request_call_permission' }, { name: 'manage_voice_call' }, { name: 'send_text_message' }] });
     expect(result[1]).toMatchObject({ id: 'docs', connected: true, tools: [{ name: 'search_docs' }] });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ method: 'notifications/initialized' });

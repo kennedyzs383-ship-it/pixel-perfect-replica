@@ -104,7 +104,7 @@ function CacadorWhatsAppPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
           {[
             { icon: MessageCircle, title: "Mensagens", detail: "Receber e responder a clientes, respeitando consentimento e modelos aprovados." },
-            { icon: Phone, title: "Chamadas", detail: "Ativar apenas se a conta, o número e a funcionalidade de chamadas forem elegíveis." },
+            { icon: Phone, title: "Chamadas de voz", detail: "Calling API, autorização do cliente e motor WebRTC para áudio em tempo real. A coexistência não é assumida como compatível." },
             { icon: Webhook, title: "Webhooks", detail: "Receber eventos da Meta num endpoint HTTPS validado." },
             { icon: LockKeyhole, title: "Proteção", detail: "Guardar tokens no servidor, separados por conta e nunca no navegador." },
           ].map((item) => {
@@ -126,7 +126,7 @@ function CacadorWhatsAppPage() {
         <ul style={{ color: "#737583", fontSize: 12, lineHeight: 1.9, paddingLeft: 19, margin: 0 }}>
           <li>A Meta pode cobrar determinadas conversas ou funcionalidades. Não será ativado nenhum serviço pago sem mostrar primeiro os custos e receber autorização.</li>
           <li>Mensagens iniciadas pela empresa seguem as regras de consentimento, janela de atendimento e modelos da Meta.</li>
-          <li>Chamadas dependem de disponibilidade regional, permissões do cliente e elegibilidade do número. Não presumimos que a coexistência suporte chamadas pela API.</li>
+          <li>Chamadas exigem número Cloud API elegível, Calling ativado e autorização explícita do cliente. O número em coexistência com a aplicação Business não será usado para chamadas API.</li>
           <li>O Caçador identifica-se como assistente de IA e encaminha para ti situações que precisem de intervenção humana.</li>
         </ul>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
@@ -136,7 +136,7 @@ function CacadorWhatsAppPage() {
       </section>
 
       <p style={{ color: "#9697a2", fontSize: 10, lineHeight: 1.6, marginTop: 17 }}>
-        A configuração não está ativa e não envia mensagens nem faz chamadas. O próximo passo é concluir a publicação HTTPS da Nuvem e configurar a aplicação WhatsApp na Meta. Mantém o teu número atual na aplicação até a elegibilidade e o processo oficial estarem confirmados.
+        A configuração não está ativa e ainda não estabelece chamadas de voz reais. O próximo passo é concluir a publicação HTTPS da Nuvem e configurar a aplicação WhatsApp na Meta. Mantém o teu número atual na aplicação até a elegibilidade e o processo oficial estarem confirmados.
       </p>
     </main>
   );

@@ -55,7 +55,7 @@ As tabelas não devem ser criadas até validar o projeto Supabase ligado, a pol�
 - Receber mensagens através de webhooks e responder pela Cloud API.
 - Mensagens iniciadas pela empresa só com consentimento adequado e modelos aprovados quando exigidos pela Meta.
 - Respeitar a janela de atendimento, qualidade, limites e políticas da Meta.
-- Chamadas: implementar apenas depois de verificar a disponibilidade do produto WhatsApp Business Calling para a conta, região e tipo de número; recolher permissão do cliente antes de iniciar chamadas.
+- Chamadas: usar a WhatsApp Business Calling API apenas num número Cloud API elegível, com Calling ativado e permissão explícita do cliente. Números em coexistência com a aplicação Business não devem ser assumidos como compatíveis com chamadas API.
 - Não assumir que o número ligado por coexistência suporta todas as capacidades disponíveis num número Cloud API dedicado.
 - Identificar o Caçador como assistente de IA; permitir transferência para atendimento humano.
 - Exigir confirmação humana para campanhas, mensagens em massa, alterações de conta e ações sensíveis.
@@ -133,3 +133,19 @@ A ferramenta de envio só fica funcional quando estas três variáveis estiverem
 - O envio está sujeito à janela de atendimento, consentimento, templates e políticas/preços Meta.
 - O token configurado é uma credencial de servidor única nesta primeira etapa; antes de oferecer o Caçador a vários utilizadores, será necessário onboarding por utilizador e armazenamento cifrado isolado.
 - Não há integração de chamadas nesta etapa.
+
+
+## Calling API adicionada ao MCP
+
+O provider `whatsapp-meta` anuncia agora estas ferramentas de sinalização de chamadas:
+
+- `get_call_settings`: consulta as definições Calling do número; não ativa a funcionalidade.
+- `get_call_permission_status`: consulta a autorização do cliente (`user_wa_id`).
+- `request_call_permission`: envia o pedido interativo oficial de autorização; não liga automaticamente.
+- `manage_voice_call`: suporta `connect`, `pre_accept`, `accept`, `reject` e `terminate`. A ação `connect` verifica primeiro a permissão na Meta. As ações que negociam áudio exigem SDP real produzido por uma stack WebRTC.
+
+### Limite técnico explícito
+
+Esta entrega acrescenta o controlo/sinalização Meta no servidor MCP, mas ainda não inclui o motor de áudio WebRTC do Caçador nem o transporte dos eventos `field=calls`/SDP answer do webhook até uma sessão WebRTC ativa. Portanto, ainda não permite uma conversa de voz real ponta a ponta. Não enviar SDP inventado. Para completar chamadas reais, falta integrar o runtime WebRTC (microfone/altifalante, ICE e peer connection), entregar os eventos `calls` em tempo real à sessão e testar com um número Cloud API elegível. A coexistência do número Business atual não é considerada compatível com chamadas API; manter esse número sem alterações.
+
+As chamadas iniciadas pela empresa exigem autorização explícita do cliente, obtida através do pedido de permissão ou outra forma reconhecida pela Meta. O cliente pode recusar e a permissão pode expirar. Não iniciar chamadas sem autorização nem fazer chamadas em massa.
