@@ -3,16 +3,9 @@ import { Phone, PhoneCall, PhoneOff, Mic, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
 import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-voice.functions";
-import { getWhatsAppCallId, isTerminalWhatsAppCallStatus, statusBelongsToCall } from "@/lib/cacador-call-events";
+import { getWhatsAppCallId, isTerminalWhatsAppCallStatus, parseWhatsAppCallEvents, parseWhatsAppCallStatuses, statusBelongsToCall, type WhatsAppCallEvent } from "@/lib/cacador-call-events";
 
-type CallEvent = {
-  id?: string;
-  from?: string;
-  to?: string;
-  event?: string;
-  direction?: string;
-  session?: { sdp_type?: string; sdp?: string };
-};
+type CallEvent = WhatsAppCallEvent;
 
 function waitForIceGathering(peer: RTCPeerConnection): Promise<void> {
   if (peer.iceGatheringState === "complete") return Promise.resolve();
@@ -227,7 +220,7 @@ export function CacadorWhatsAppCalling() {
   }, [processCustomerAudio]);
 
   const receiveSignal = useCallback(async (payload: Record<string, unknown>) => {
-    const calls = Array.isArray(payload.calls) ? payload.calls as CallEvent[] : [];
+    const calls = parseWhatsAppCallEvents(payload.calls);
     for (const call of calls) {
       const event = String(call.event ?? "").toLowerCase();
       const callId = getWhatsAppCallId(call);
@@ -260,7 +253,7 @@ export function CacadorWhatsAppCalling() {
       }
     }
 
-    const statuses = Array.isArray(payload.statuses) ? payload.statuses as Array<Record<string, unknown>> : [];
+    const statuses = parseWhatsAppCallStatuses(payload.statuses);
     const currentCallId = activeCallIdRef.current || incomingRef.current?.id || "";
     const terminalStatus = statuses.find((item) =>
       isTerminalWhatsAppCallStatus(item.status ?? item.event) &&
