@@ -33,7 +33,7 @@ function getResearchLinks(lead: Lead) {
   const terms = [lead.company, lead.category, lead.city].filter(Boolean).join(" ");
   const encoded = encodeURIComponent(terms);
   const quotedCompany = encodeURIComponent('"' + lead.company + '" ' + lead.city);
-  return [
+  const links = [
     { label: "Google", url: "https://www.google.com/search?q=" + encoded + " empresa contacto" },
     { label: "Google Maps", url: "https://www.google.com/maps/search/?api=1&query=" + encoded },
     { label: "LinkedIn", url: "https://www.google.com/search?q=" + encodeURIComponent("site:linkedin.com/company " + lead.company + " " + lead.city) },
@@ -41,6 +41,19 @@ function getResearchLinks(lead: Lead) {
     { label: "Instagram", url: "https://www.google.com/search?q=" + encodeURIComponent("site:instagram.com " + lead.company + " " + lead.city) },
     { label: "Contactos", url: "https://www.google.com/search?q=" + quotedCompany + "+telefone+email" },
   ];
+  if (lead.website.trim()) {
+    try {
+      const address = new URL(/^https?:\\/\\//i.test(lead.website) ? lead.website : "https://" + lead.website);
+      if (address.protocol === "https:" || address.protocol === "http:") {
+        links.push(
+          { label: "PageSpeed", url: "https://pagespeed.web.dev/analysis?url=" + encodeURIComponent(address.href) },
+          { label: "SSL Labs", url: "https://www.ssllabs.com/ssltest/analyze.html?d=" + encodeURIComponent(address.hostname) },
+          { label: "Security Headers", url: "https://securityheaders.com/?q=" + encodeURIComponent(address.hostname) + "&followRedirects=on" },
+        );
+      }
+    } catch { /* Invalid website addresses are left for the user to correct. */ }
+  }
+  return links;
 }
 
 function readLeads(ownerId?: string): Lead[] {
