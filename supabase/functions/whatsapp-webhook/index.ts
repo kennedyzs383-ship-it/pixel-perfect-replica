@@ -92,6 +92,27 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
         if (!isRecord(item) || typeof item.from !== "string" || !/^\d{8,15}$/.test(item.from) ||
           typeof item.id !== "string" || item.id.length < 8 || item.id.length > 200) continue;
         const type = typeof item.type === "string" ? item.type : "unknown";
+        // Persist the verified Meta webhook before broadcasting. The unique
+        // (owner_id, message_id) key makes webhook retries idempotent.
+        const mediaPayload = isRecord(item[type]) ? item[type] : null;
+        const { error: persistError } = await supabase
+          .from("whatsapp_inbox_messages")
+          .upsert({
+            owner_id: ownerId,
+            message_id: item.id,
+            from_phone: item.from,
+            contact_name: contactNameFrom(contacts, item.from),
+            message_type: type,
+            text_body: type === "text" && isRecord(item.text) && typeof item.text.body === "string"
+              ? item.text.body.slice(0, 4096)
+              : null,
+            media_id: mediaPayload && typeof mediaPayload.id === "string" ? mediaPayload.id : null,
+            media_mime_type: mediaPayload && typeof mediaPayload.mime_type === "string" ? mediaPayload.mime_type : null,
+            meta_timestamp: typeof item.timestamp === "string" ? item.timestamp : null,
+            phone_number_id: configuredPhoneNumberId,
+            raw_message: item,
+          }, { onConflict: "owner_id,message_id", ignoreDuplicates: true });
+        if (persistError) throw new Error("Could not persist incoming WhatsApp message: " + persistError.message);
         let messageText = "";
         if (type === "text" && isRecord(item.text) && typeof item.text.body === "string") {
           messageText = item.text.body;
