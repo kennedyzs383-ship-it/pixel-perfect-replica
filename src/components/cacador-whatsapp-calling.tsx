@@ -115,10 +115,10 @@ export function CacadorWhatsAppCalling() {
     if (blob.size < 1200) return;
     const callPeer = peerRef.current;
     if (!callPeer) return;
-    // Bound the queue: old speech must not accumulate and be answered long
-    // after the customer has moved on. Keep at most two segments in flight.
+    // Bound the queue so excess incoming segments are dropped instead of
+    // accumulating and being answered long after the customer has moved on.
     if (pendingVoiceSegmentsRef.current >= 2) {
-      setStatus("A voz está a demorar. A descartar um segmento antigo para evitar respostas atrasadas…");
+      setStatus("A voz está a demorar. A ignorar este segmento para evitar respostas atrasadas…");
       return;
     }
     pendingVoiceSegmentsRef.current += 1;
