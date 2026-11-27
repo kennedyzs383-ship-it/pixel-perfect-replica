@@ -1,4 +1,5 @@
 import { listCacadorMcpTools } from './cacador-mcp.server';
+import { CACADOR_MODEL } from './cacador-connection';
 
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 type Completion = { choices?: Array<{ message?: { content?: string | null; tool_calls?: ToolCall[] } }> };
@@ -15,10 +16,10 @@ export async function askCacadorWithMcp(message: string, context = '') {
     serverId: server.id, serverName: server.name, toolName: tool.name, description: tool.description,
     schema: tool.inputSchema && typeof tool.inputSchema === 'object' ? tool.inputSchema as Record<string, unknown> : { type: 'object', properties: {} },
   })));
-  const tools = available.map(tool => ({
+  const tools = available.map((tool, index) => ({
     type: 'function',
     function: {
-      name: `${tool.serverId}__${tool.toolName}`,
+      name: `cacador_tool_${index}`,
       description: `Servidor: ${tool.serverName}. ${tool.description}`.slice(0, 1000),
       parameters: tool.schema,
     },
@@ -27,7 +28,7 @@ export async function askCacadorWithMcp(message: string, context = '') {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: process.env.ZROUTER_MODEL || 'openai/gpt-4o-mini',
+      model: process.env.ZROUTER_MODEL || CACADOR_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         ...(context ? [{ role: 'user', content: `Contexto da conversa:\n${context}` }] : []),
