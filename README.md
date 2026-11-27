@@ -20,7 +20,7 @@ A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de do
 - Assistente de IA local no navegador (Wllama + Qwen2.5 0.5B Instruct quantizado), sem chave de API e sem custo por mensagem após o download inicial do modelo (cerca de 500 MB).
 - Histórico das últimas 100 mensagens do assistente guardado localmente no navegador; o modelo precisa de ser ativado novamente ao reabrir a página.
 - Entrada de voz pelo microfone e leitura das respostas pelo navegador, conforme o suporte e as permissões do dispositivo.
-- CRM do Caçador com pipeline comercial, conversas internas/notas e tarefas.
+- CRM do Caçador com pipeline comercial, conversas internas/notas e tarefas.\n- Página de preparação da integração WhatsApp em `/cacador/whatsapp`, com dois canais separados (número Business existente por coexistência, sujeito à elegibilidade, e número dedicado Cloud API); ainda não ligada.
 - Verificações automáticas de testes e build através do GitHub Actions.
 
 ## Limites importantes
@@ -34,7 +34,7 @@ A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de do
 - A IA local não faz pesquisa na internet, não consulta automaticamente empresas ou websites, não envia mensagens, não acede ao Canva e não executa ações externas. A prospeção web, análise automática de websites e integração OAuth/Canva MCP ainda não estão implementadas.
 - Os atalhos de investigação abrem pesquisas e ferramentas públicas externas; o Caçador não recolhe nem valida automaticamente os resultados. PageSpeed, SSL Labs e Security Headers são serviços externos, com os seus próprios limites e políticas.
 - O histórico do chat fica apenas no armazenamento local do navegador e pode desaparecer se os dados do site forem limpos. Não sincroniza entre dispositivos.
-- As notas internas do CRM não são mensagens enviadas ao cliente. A abertura do WhatsApp é manual e depende do telefone público registado.
+- As notas internas do CRM não são mensagens enviadas ao cliente. A abertura do WhatsApp é manual e depende do telefone público registado. A página `/cacador/whatsapp` é apenas de preparação: ainda não existe OAuth/Embedded Signup, webhook ou envio de mensagens/chamadas.
 - Não existe compra de domínios dentro da plataforma. A publicação futura deverá respeitar a regra de usar apenas opções gratuitas e não exigir cartão ou subscrição.
 - A chave service_role e qualquer secret key nunca devem ser colocadas no frontend.
 
