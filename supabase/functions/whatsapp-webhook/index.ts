@@ -10,11 +10,15 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
   const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const configuredPhoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
   if (!ownerId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
     throw new Error("WHATSAPP_OWNER_ID is not configured as a valid account UUID.");
   }
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Supabase server credentials are not configured for call signaling.");
+  }
+  if (!configuredPhoneNumberId || !/^\\d{5,30}$/.test(configuredPhoneNumberId)) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID is not configured for call signaling.");
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -27,6 +31,10 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
     for (const change of entry.changes) {
       if (!isRecord(change) || change.field !== "calls" || !isRecord(change.value)) continue;
       const value = change.value;
+      // A valid Meta signature authenticates the app, not the specific phone number.
+      // Only forward events explicitly addressed to this Caçador account number.
+      const metadata = isRecord(value.metadata) ? value.metadata : null;
+      if (metadata?.phone_number_id !== configuredPhoneNumberId) continue;
       const calls = Array.isArray(value.calls) ? value.calls : [];
       const statuses = Array.isArray(value.statuses) ? value.statuses : [];
       const topic = `whatsapp-calls:${ownerId}`;
