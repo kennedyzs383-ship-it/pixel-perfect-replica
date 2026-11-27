@@ -45,7 +45,7 @@ export async function askCacadorWithMcp(message: string, context = '') {
   const proposals: CacadorMcpProposal[] = [];
   for (const call of assistant?.tool_calls ?? []) {
     const indexText = call.function.name.startsWith('cacador_tool_') ? call.function.name.slice('cacador_tool_'.length) : '';
-    const index = /^\\d+$/.test(indexText) ? Number(indexText) : -1;
+    const index = /^[0-9]+$/.test(indexText) ? Number(indexText) : -1;
     const match = Number.isSafeInteger(index) && index >= 0 ? available[index] : undefined;
     if (!match || call.function.name !== `cacador_tool_${index}`) continue;
     const { serverId, toolName } = match;
