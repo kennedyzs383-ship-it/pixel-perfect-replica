@@ -22,7 +22,8 @@ export async function transcribeCacadorAudio(input: unknown) {
   const { baseUrl, apiKey } = providerConfig();
   const bytes = Uint8Array.from(atob(data.audioBase64), char => char.charCodeAt(0));
   const form = new FormData();
-  const extensionByMime: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav' };\n  form.set('file', new Blob([bytes], { type: data.mimeType }), `customer-audio.${extensionByMime[data.mimeType]}`);
+  const extensionByMime: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav' };
+  form.set('file', new Blob([bytes], { type: data.mimeType }), `customer-audio.${extensionByMime[data.mimeType]}`);
   form.set('model', process.env.CACADOR_STT_MODEL || 'whisper-1');
   form.set('language', 'pt');
   const response = await fetch(baseUrl + '/audio/transcriptions', {
