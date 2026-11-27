@@ -8,7 +8,7 @@ export function getOllamaSettings(): OllamaSettings {
   try {
     const saved = JSON.parse(window.localStorage.getItem(OLLAMA_KEY) ?? "{}") as Partial<OllamaSettings>;
     return {
-      baseUrl: typeof saved.baseUrl === "string" ? saved.baseUrl.replace(/\\/$/, "") : DEFAULT_OLLAMA.baseUrl,
+      baseUrl: typeof saved.baseUrl === "string" ? saved.baseUrl.replace(/\/$/, "") : DEFAULT_OLLAMA.baseUrl,
       model: typeof saved.model === "string" ? saved.model : DEFAULT_OLLAMA.model,
     };
   } catch { return DEFAULT_OLLAMA; }
@@ -16,15 +16,15 @@ export function getOllamaSettings(): OllamaSettings {
 
 export function saveOllamaSettings(settings: OllamaSettings): void {
   if (typeof window === "undefined") return;
-  const baseUrl = settings.baseUrl.trim().replace(/\\/$/, "");
+  const baseUrl = settings.baseUrl.trim().replace(/\/$/, "");
   const model = settings.model.trim();
-  if (!/^https?:\\/\\//i.test(baseUrl)) throw new Error("Indica um endereço HTTP ou HTTPS válido para o Ollama.");
+  if (!/^https?:\/\//i.test(baseUrl)) throw new Error("Indica um endereço HTTP ou HTTPS válido para o Ollama.");
   if (!model) throw new Error("Indica o nome do modelo Ollama.");
   window.localStorage.setItem(OLLAMA_KEY, JSON.stringify({ baseUrl, model }));
 }
 
 export async function testOllamaConnection(settings = getOllamaSettings()): Promise<string[]> {
-  const response = await fetch(settings.baseUrl.replace(/\\/$/, "") + "/api/tags", {
+  const response = await fetch(settings.baseUrl.replace(/\/$/, "") + "/api/tags", {
     signal: AbortSignal.timeout(8000),
     headers: { Accept: "application/json" },
   });
@@ -34,7 +34,7 @@ export async function testOllamaConnection(settings = getOllamaSettings()): Prom
 }
 
 export async function askOllama(messages: Array<{ role: "user" | "assistant"; content: string }>, settings = getOllamaSettings()): Promise<string> {
-  const response = await fetch(settings.baseUrl.replace(/\\/$/, "") + "/api/chat", {
+  const response = await fetch(settings.baseUrl.replace(/\/$/, "") + "/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
