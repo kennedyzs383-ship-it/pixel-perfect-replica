@@ -170,8 +170,8 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
       const to = parsed.data.to!.replace(/^\+/, '');
       const permission = await graphRequest(`${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(to)}`, { method: 'GET' }) as { permission?: { status?: string }; actions?: Array<{ action_name?: string; can_perform_action?: boolean }> };
       const canStart = permission.actions?.some(item => item.action_name === 'start_call' && item.can_perform_action);
-      if (!canStart && !['granted', 'temporary', 'permanent'].includes(permission.permission?.status ?? '')) {
-        throw new Error('A Meta ainda não confirma autorização válida para ligar a este cliente. Envia primeiro request_call_permission e aguarda aprovação.');
+      if (!canStart) {
+        throw new Error('A Meta não confirmou explicitamente a ação start_call para este cliente. Envia primeiro request_call_permission e aguarda a autorização reconhecida pela API.');
       }
     }
     const payload: Record<string, unknown> = { messaging_product: 'whatsapp', action: parsed.data.action };
