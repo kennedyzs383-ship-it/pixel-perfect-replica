@@ -30,7 +30,7 @@ export function CacadorAIAssistant() {
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [aiError, setAiError] = useState("");
-  const recognition = useRef<SpeechRecognitionLike | null>(null);\n  const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);
+  const recognition = useRef<SpeechRecognitionLike | null>(null);\n  const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);\n  const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -108,7 +108,7 @@ export function CacadorAIAssistant() {
     }
   };
 
-  return <section className="hunter-ai">
+  sendVoicePrompt.current = (prompt) => { void send(undefined, prompt); };\n\n  return <section className="hunter-ai">
     <div className="hunter-ai-head">
       <div className="hunter-ai-icon"><Bot size={20}/></div>
       <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span><i/> Assistente conversacional · Z Router</span></div>
