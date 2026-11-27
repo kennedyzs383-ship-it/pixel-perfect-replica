@@ -16,6 +16,7 @@ A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de do
 - Exportação de cada website como ficheiro HTML estático.
 - Preferências de cor e notificações guardadas localmente.
 - Área Caçador para registo e gestão manual de empresas e oportunidades.
+- Atalhos de investigação pública no Caçador para Google, Google Maps, LinkedIn, Facebook, Instagram e pesquisa de contactos; com website preenchido, inclui ferramentas externas de análise de desempenho e segurança.
 - Assistente de IA local no navegador (Wllama + Qwen2.5 0.5B Instruct quantizado), sem chave de API e sem custo por mensagem após o download inicial do modelo (cerca de 500 MB).
 - Histórico das últimas 100 mensagens do assistente guardado localmente no navegador; o modelo precisa de ser ativado novamente ao reabrir a página.
 - Entrada de voz pelo microfone e leitura das respostas pelo navegador, conforme o suporte e as permissões do dispositivo.
@@ -31,6 +32,7 @@ A Nuvem deve funcionar apenas com serviços gratuitos. Não haverá compra de do
 - Alojamento e publicação gratuitos ainda não estão ligados.
 - O assistente atual do Caçador executa o modelo Qwen2.5 0.5B localmente no navegador. O primeiro carregamento exige internet para descarregar o motor e o modelo; depois, a inferência é local. A velocidade e a qualidade dependem da memória, do processador e do navegador do dispositivo. O modelo pequeno não tem a mesma capacidade de serviços de IA avançados.
 - A IA local não faz pesquisa na internet, não consulta automaticamente empresas ou websites, não envia mensagens, não acede ao Canva e não executa ações externas. A prospeção web, análise automática de websites e integração OAuth/Canva MCP ainda não estão implementadas.
+- Os atalhos de investigação abrem pesquisas e ferramentas públicas externas; o Caçador não recolhe nem valida automaticamente os resultados. PageSpeed, SSL Labs e Security Headers são serviços externos, com os seus próprios limites e políticas.
 - O histórico do chat fica apenas no armazenamento local do navegador e pode desaparecer se os dados do site forem limpos. Não sincroniza entre dispositivos.
 - As notas internas do CRM não são mensagens enviadas ao cliente. A abertura do WhatsApp é manual e depende do telefone público registado.
 - Não existe compra de domínios dentro da plataforma. A publicação futura deverá respeitar a regra de usar apenas opções gratuitas e não exigir cartão ou subscrição.
