@@ -107,3 +107,29 @@ Configurar em Edge Functions → Secrets, sem os colocar no Git ou no frontend:
 A URL pública da função será `https://emcdkxxmfqgejfmfpxwe.supabase.co/functions/v1/whatsapp-webhook`, depois de a função ser publicada. A publicação ainda não foi feita porque os segredos da Meta não foram fornecidos/configurados.
 
 O `supabase/config.toml` foi alinhado com o projeto ativo O-CAÇADOR e define `verify_jwt = false` apenas para esta função pública; a autenticação externa é feita pelo handshake e pela assinatura HMAC da Meta.
+
+
+## Ferramentas WhatsApp disponíveis no cérebro MCP
+
+O cliente MCP do Caçador inclui agora um servidor integrado identificado como `whatsapp-meta`, sem depender de um endpoint MCP externo separado. As ferramentas aparecem no painel MCP e no catálogo que o cérebro consulta:
+
+- `get_connection_status`: verifica a presença das configurações sem expor credenciais.
+- `send_text_message`: envia uma mensagem individual pela WhatsApp Cloud API. A interface exige confirmação humana antes da execução.
+
+### Secrets do servidor da aplicação
+
+Configurar no alojamento da aplicação (não no frontend e não no Git):
+
+- `WHATSAPP_ACCESS_TOKEN`: token de acesso da WhatsApp Cloud API.
+- `WHATSAPP_PHONE_NUMBER_ID`: identificador do número registado na Cloud API.
+- `WHATSAPP_GRAPH_API_VERSION`: versão Graph suportada pela app Meta, no formato `vNN.N`.
+
+A ferramenta de envio só fica funcional quando estas três variáveis estiverem configuradas e a Meta aceitar o token e o número. A ferramenta de estado aparece mesmo antes da configuração para explicar o que falta.
+
+### Limites desta etapa
+
+- Esta integração MCP permite consultar configuração e enviar texto; ainda não processa mensagens recebidas no cérebro.
+- O webhook atual apenas valida a assinatura e confirma a receção; não persiste nem encaminha mensagens.
+- O envio está sujeito à janela de atendimento, consentimento, templates e políticas/preços Meta.
+- O token configurado é uma credencial de servidor única nesta primeira etapa; antes de oferecer o Caçador a vários utilizadores, será necessário onboarding por utilizador e armazenamento cifrado isolado.
+- Não há integração de chamadas nesta etapa.

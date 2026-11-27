@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { callWhatsAppMcpTool, listWhatsAppMcpTools } from './cacador-whatsapp-mcp.server';
 
 type McpServerConfig = { id: string; name: string; url: string; tokenEnv?: string; allowedTools: string[] };
 type JsonRpcResponse = { result?: { tools?: Array<{ name: string; description?: string; inputSchema?: unknown }>; content?: Array<{ type?: string; text?: string }>; isError?: boolean }; error?: { message?: string } };
@@ -60,12 +61,18 @@ export async function listCacadorMcpTools() {
       return { id: server.id, name: server.name, connected: true, tools };
     } catch { return { id: server.id, name: server.name, connected: false, tools: [] }; }
   }));
-  return results;
+  return [
+    { id: 'whatsapp-meta', name: 'WhatsApp Cloud API · MCP integrado', connected: true, tools: listWhatsAppMcpTools() },
+    ...results,
+  ];
 }
 
 const ToolCallSchema = z.object({ serverId: z.string().min(1).max(40), toolName: z.string().min(1).max(100), arguments: z.record(z.string(), z.unknown()).default({}) });
 export async function callCacadorMcpTool(input: unknown) {
   const data = ToolCallSchema.parse(input);
+  if (data.serverId === 'whatsapp-meta') {
+    return callWhatsAppMcpTool(data.toolName, data.arguments);
+  }
   const server = configuredServers().find(item => item.id === data.serverId);
   if (!server || !server.allowedTools.includes(data.toolName)) throw new Error('Esta ferramenta não está autorizada na configuração do Caçador.');
   return withMcp(server, async sessionId => {
