@@ -97,7 +97,7 @@ export function CacadorAIAssistant() {
         try {
           const context = messagesRef.current.slice(-8).concat(customerLine).map(line =>
             (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
-          ).join("\\n");
+          ).join("\n");
           const result = await askCacadorWithMcpFn({
             data: {
               message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + incoming.from +
