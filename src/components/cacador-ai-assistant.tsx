@@ -61,6 +61,9 @@ export function CacadorAIAssistant() {
   const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
   const seenWhatsAppMessageIds = useRef<Set<string>>(new Set());
+  const messagesRef = useRef(messages);
+  const speakRef = useRef<(text: string) => void>(() => undefined);
+  messagesRef.current = messages;
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -92,7 +95,7 @@ export function CacadorAIAssistant() {
         setBusy(true);
         setAiError("");
         try {
-          const context = messages.slice(-8).map(line =>
+          const context = messagesRef.current.slice(-8).map(line =>
             (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
           ).join("\\n");
           const result = await askCacadorWithMcpFn({
@@ -109,7 +112,7 @@ export function CacadorAIAssistant() {
           }
           if (result.answer?.trim()) {
             setMessages(previous => [...previous, { role: "assistant", text: result.answer }]);
-            speak(result.answer);
+            speakRef.current(result.answer);
           } else if (!result.proposals.length) {
             setAiError("O Z Router recebeu a mensagem WhatsApp, mas não preparou uma resposta.");
           }
@@ -173,6 +176,8 @@ export function CacadorAIAssistant() {
     utterance.pitch = 1;
     window.speechSynthesis.speak(utterance);
   };
+
+  speakRef.current = speak;
 
   const toggleListening = () => {
     if (listening) {
