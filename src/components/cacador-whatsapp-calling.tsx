@@ -36,6 +36,7 @@ export function CacadorWhatsAppCalling() {
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState("A verificar sessão…");
   const [busy, setBusy] = useState(false);
+  const [realtimeReady, setRealtimeReady] = useState(false);
   const [activeCallId, setActiveCallId] = useState("");
   const [incoming, setIncoming] = useState<CallEvent | null>(null);
   const [muted, setMuted] = useState(false);
@@ -263,8 +264,13 @@ export function CacadorWhatsAppCalling() {
           });
         })
         .subscribe((state) => {
-          if (state === "SUBSCRIBED") setStatus("Canal de chamadas ligado. À espera de uma chamada.");
-          else if (state === "CHANNEL_ERROR" || state === "TIMED_OUT") setStatus("Não foi possível ligar o canal de chamadas em tempo real.");
+          if (state === "SUBSCRIBED") {
+            setRealtimeReady(true);
+            setStatus("Canal de chamadas ligado. À espera de uma chamada.");
+          } else if (state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") {
+            setRealtimeReady(false);
+            setStatus("Canal de chamadas indisponível. Não inicies chamadas até a ligação recuperar.");
+          }
         });
     }).catch(() => setStatus("Não foi possível verificar a sessão do Caçador."));
     return () => {
@@ -287,6 +293,7 @@ export function CacadorWhatsAppCalling() {
     setBusy(true);
     try {
       if (!userId) throw new Error("Inicia sessão no Caçador.");
+      if (!realtimeReady) throw new Error("O canal seguro de sinalização ainda não está ligado. Aguarda antes de iniciar a chamada.");
       if (!/^\+?[1-9]\d{7,14}$/.test(phone.trim())) throw new Error("Indica o número do cliente com indicativo internacional.");
       const peer = await createPeer();
       const offer = await peer.createOffer();
@@ -360,7 +367,7 @@ export function CacadorWhatsAppCalling() {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
         <input aria-label="Número do cliente" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+244923000000" style={{ flex: "1 1 220px", minWidth: 0, border: "1px solid #d9dae3", borderRadius: 8, padding: "11px 12px", fontSize: 13 }} />
         <button type="button" disabled={busy || !userId || !phone.trim()} onClick={() => void requestPermission()} style={{ border: 0, borderRadius: 8, padding: "10px 13px", background: "#f0edff", color: "#5e45b4", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: busy || !userId || !phone.trim() ? .5 : 1 }}>Pedir autorização</button>
-        <button type="button" disabled={busy || !userId || !phone.trim() || Boolean(activeCallId) || Boolean(incoming)} onClick={() => void startCall()} style={{ border: 0, borderRadius: 8, padding: "10px 13px", background: "#16845d", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: busy || !userId || !phone.trim() || Boolean(activeCallId) || Boolean(incoming) ? .5 : 1 }}><Phone size={14} style={{ verticalAlign: "middle", marginRight: 5 }} />Ligar</button>
+        <button type="button" disabled={busy || !userId || !realtimeReady || !phone.trim() || Boolean(activeCallId) || Boolean(incoming)} onClick={() => void startCall()} style={{ border: 0, borderRadius: 8, padding: "10px 13px", background: "#16845d", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: busy || !userId || !realtimeReady || !phone.trim() || Boolean(activeCallId) || Boolean(incoming) ? .5 : 1 }}><Phone size={14} style={{ verticalAlign: "middle", marginRight: 5 }} />Ligar</button>
       </div>
       {incoming && <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "#f0faf4", borderRadius: 9, padding: 12, marginTop: 12 }}>
         <strong style={{ flex: "1 1 180px", fontSize: 12 }}>Chamada recebida de {incoming.from ?? "cliente"}</strong>
