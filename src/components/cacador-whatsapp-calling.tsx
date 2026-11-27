@@ -94,19 +94,21 @@ export function CacadorWhatsAppCalling() {
 
   const processCustomerAudio = useCallback((blob: Blob) => {
     if (blob.size < 1200) return;
+    const callPeer = peerRef.current;
+    if (!callPeer) return;
     // Keep capture independent from AI latency, while processing utterances in order.
     voiceQueueRef.current = voiceQueueRef.current.then(async () => {
-      if (!peerRef.current) return;
+      if (peerRef.current !== callPeer) return;
       try {
         const bytes = new Uint8Array(await blob.arrayBuffer());
         let binary = "";
         for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         const transcription = await transcribeCacadorVoice({ data: { audioBase64: btoa(binary), mimeType: blob.type || "audio/webm" } });
-        if (!transcription.text.trim() || !peerRef.current) return;
+        if (!transcription.text.trim() || peerRef.current !== callPeer) return;
         setStatus("Cliente: " + transcription.text.slice(0, 150) + " — a preparar resposta…");
         const answer = await askCacadorWithMcpFn({ data: { message: transcription.text, context: "Estás numa chamada WhatsApp em direto. Responde em português de Angola, de forma breve, natural e própria para ser dita em voz alta. Não afirmes que executaste ações externas sem autorização. Se o cliente pedir uma pessoa, informa que a chamada será encaminhada." } });
         if (!answer.answer?.trim()) throw new Error("O Z Router não devolveu uma resposta para a chamada.");
-        if (!peerRef.current) return;
+        if (peerRef.current !== callPeer) return;
         await speakToCustomer(answer.answer);
         setStatus("Caçador respondeu por voz. À escuta do cliente…");
       } catch (error) {
