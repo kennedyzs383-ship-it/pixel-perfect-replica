@@ -169,7 +169,7 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
     if (parsed.data.action === 'connect') {
       const to = parsed.data.to!.replace(/^\+/, '');
       const permission = await graphRequest(`${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(to)}`, { method: 'GET' }) as { permission?: { status?: string }; actions?: Array<{ action_name?: string; can_perform_action?: boolean }> };
-      const canStart = permission.actions?.some(item => item.action_name === 'start_call' && item.can_perform_action);
+      const canStart = permission.actions?.some(item => item.action_name === 'start_call' && item.can_perform_action === true);
       if (!canStart) {
         throw new Error('A Meta não confirmou explicitamente a ação start_call para este cliente. Envia primeiro request_call_permission e aguarda a autorização reconhecida pela API.');
       }
