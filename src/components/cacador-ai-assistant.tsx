@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { askCacadorLocalAI, loadCacadorLocalAI, type LocalAIProgress } from "@/lib/cacador-local-ai";
+import { getSignedInUser } from "@/lib/nuvem-supabase";
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandSparkles } from "lucide-react";
 
 type ChatLine = { role: "user" | "assistant"; text: string };
 const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
-function readStoredMessages(): ChatLine[] {
+function readStoredMessages(storageKey: string): ChatLine[] {
   if (typeof window === "undefined") return [];
   try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) ?? "[]");
+    const value: unknown = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
     if (!Array.isArray(value)) return [];
     return value.filter((item): item is ChatLine => Boolean(item) && typeof item === "object" &&
       ((item as ChatLine).role === "user" || (item as ChatLine).role === "assistant") &&
@@ -36,12 +37,9 @@ export function CacadorAIAssistant() {
   const [localReady, setLocalReady] = useState(false);
   const [loadingModel, setLoadingModel] = useState(false);
   const [modelProgress, setModelProgress] = useState<LocalAIProgress>({ percent: 0, text: "IA local ainda não carregada" });
-  const [messages, setMessages] = useState<ChatLine[]>(() => {
-    const stored = readStoredMessages();
-    return stored.length ? stored : [
-      { role: "assistant", text: "Olá! Sou o Caçador. Posso ajudar-te a analisar oportunidades, preparar abordagens comerciais e planear websites. Escreve ou usa o microfone para falar comigo." }
-    ];
-  });
+  const welcomeMessage: ChatLine = { role: "assistant", text: "Olá! Sou o Caçador. Posso ajudar-te a analisar oportunidades, preparar abordagens comerciais e planear websites. Escreve ou usa o microfone para falar comigo." };
+  const [chatStorageKey, setChatStorageKey] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatLine[]>([welcomeMessage]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [speaking, setSpeaking] = useState(true);
@@ -57,8 +55,27 @@ export function CacadorAIAssistant() {
   }, [messages, busy]);
 
   useEffect(() => {
-    try { window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-100))); } catch { /* Storage may be unavailable or full. */ }
-  }, [messages]);
+    let active = true;
+    void getSignedInUser().then((user) => {
+      if (!active) return;
+      const key = user ? CHAT_STORAGE_KEY + ":" + user.id : CHAT_STORAGE_KEY + ":anonymous";
+      setChatStorageKey(key);
+      const stored = readStoredMessages(key);
+      setMessages(stored.length ? stored : [welcomeMessage]);
+    }).catch(() => {
+      if (!active) return;
+      const key = CHAT_STORAGE_KEY + ":anonymous";
+      setChatStorageKey(key);
+      const stored = readStoredMessages(key);
+      setMessages(stored.length ? stored : [welcomeMessage]);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!chatStorageKey) return;
+    try { window.localStorage.setItem(chatStorageKey, JSON.stringify(messages.slice(-100))); } catch { /* Storage may be unavailable or full. */ }
+  }, [chatStorageKey, messages]);
 
   useEffect(() => () => {
     recognition.current?.stop();
