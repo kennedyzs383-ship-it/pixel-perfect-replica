@@ -77,3 +77,19 @@ A biblioteca e a versão devem ser adicionadas ao projeto apenas depois de confi
 ## Decisão de segurança
 
 Não adaptar `CACADOR_MCP_SERVERS_JSON` para guardar um token Canva global. A integração Canva deve ter um caminho OAuth dedicado e tokens separados por utilizador. A camada MCP genérica existente continua disponível para os outros servidores, sem alteração do comportamento atual.
+## Verificação adicional do runtime e armazenamento (27-11-2026)
+
+- O projeto usa bun.lock (não foi encontrado package-lock.json nem pnpm-lock.yaml). Qualquer nova dependência deve ser instalada/atualizada com Bun para manter o lockfile coerente.
+- vite.config.ts delega a configuração a @lovable.dev/vite-tanstack-config. O comentário dessa configuração indica Nitro com Cloudflare como target predefinido; não existe atualmente wrangler.toml, wrangler.json ou nitro.config.ts na raiz da branch.
+- O SDK MCP TypeScript v2 foi reestruturado para Web Standards e a documentação Cloudflare confirma a utilização do pacote @modelcontextprotocol/client em Workers. Isto torna o runtime compatível em princípio, mas não prova que o bundle Nitro atual aceite a versão escolhida sem ajustes. A prova final tem de ser um build e um teste no runtime publicado.
+- A aplicação já usa Supabase no servidor para validar sessões. Não foi encontrada, nesta inspeção, uma tabela/migração pronta para guardar estado OAuth do Canva. A opção mais simples a avaliar é uma tabela Supabase dedicada, com registos separados por utilizador e payloads OAuth cifrados no servidor com uma chave de ambiente; a autorização de leitura/escrita deve ser estritamente limitada ao backend e ao dono da ligação. Não usar memória do processo nem localStorage.
+- Não adicionar Cloudflare Durable Objects/Agents só para resolver o armazenamento: isso introduziria outra camada de infraestrutura e bindings que ainda não existem na configuração do projeto.
+
+### Próximas tarefas técnicas antes do código OAuth
+
+1. Confirmar o target real do deploy Nitro (Cloudflare Workers ou outro adaptador Lovable) e executar build no mesmo target.
+2. Escolher e fixar uma versão compatível de @modelcontextprotocol/client, atualizar bun.lock e confirmar imports/API v2 num teste isolado.
+3. Criar migração para armazenamento OAuth por utilizador e testes de isolamento/cifragem.
+4. Só depois ligar as rotas de início/callback ao domínio HTTPS final, pois o callback registado no Canva tem de coincidir exatamente com o usado pela aplicação.
+
+**Conclusão desta verificação:** há uma via técnica plausível sem substituir o stack atual, mas ainda não existe prova de build/deploy nem armazenamento OAuth implementado. A integração continua não ligada.
