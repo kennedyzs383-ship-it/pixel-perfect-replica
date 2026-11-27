@@ -34,7 +34,7 @@ export async function generateCacadorAnswer(message: string, context = '', test 
         model,
         messages: [
           { role: 'system', content: test ? 'Responde apenas: Ligação confirmada.' : instructions },
-          { role: 'user', content: context ? `Contexto fornecido pelo utilizador:\\n${context}\n\n${message}` : message },
+          { role: 'user', content: context ? `Contexto fornecido pelo utilizador:\n${context}\n\n${message}` : message },
         ],
         temperature: test ? 0 : 0.55,
         max_tokens: test ? 80 : 1200,
