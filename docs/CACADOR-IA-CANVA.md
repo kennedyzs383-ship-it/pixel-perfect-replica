@@ -1,26 +1,37 @@
-# Caçador: IA, voz e integração Canva
+# Caçador: Z Router, voz e integração Canva
 
-Esta extensão foi adicionada sem remover as funcionalidades existentes do Caçador.
+Esta extensão mantém a autenticação, o CRM, o editor e as restantes funcionalidades existentes da Nuvem.
 
-## Cérebro de IA
+## Cérebro de IA — Z Router
 
-O utilizador escolheu **Lovable AI** no formulário seguro, em vez de fornecer uma chave própria. O Caçador utiliza Gemini através do SDK Lovable AI exclusivamente em funções de servidor. Não é necessário configurar `GEMINI_API_KEY` nesta opção.
+O Caçador usa a API compatível com OpenAI do Z Router através de uma função executada exclusivamente no servidor.
 
-Em **Definições → Definições gerais → Chaves API → Google Gemini**, abre **Configurar Gemini** e usa **Testar ligação**. O estado **Ligado** exige uma resposta utilizável do modelo; autenticação recusada, falta de créditos, quotas, permissões e falhas de comunicação mantêm **Não ligado**. Cada reabertura verifica novamente e não guarda o resultado no navegador.
+- Secret obrigatória no Lovable: `ZROUTER_API_KEY`.
+- Modelo predefinido: `openrouter/baidu/ernie-5.5-flash-preview:free`.
+- Modelo alternativo opcional: `ZROUTER_MODEL`, usando o identificador exato do catálogo da conta.
+- Endpoint: `https://www.zrouter.com/v1/chat/completions`.
 
-As chamadas exigem uma sessão validada no servidor, da conta Cloud ou do CRM original. A ligação original do CRM permanece separada através de `VITE_CACADOR_SUPABASE_URL` e `VITE_CACADOR_SUPABASE_PUBLISHABLE_KEY`; não são migrados dados, contas ou sessões para a infraestrutura de IA. As antigas variáveis públicas continuam compatíveis quando apontam para o mesmo projeto original.
+A chave privada deve ficar em **Lovable → Secrets**. Nunca a coloques em ficheiros versionados, em variáveis `VITE_*`, no frontend, em mensagens ou em commits. A chave própria do Lovable pode continuar configurada; o cérebro do Caçador usa Z Router como fornecedor principal.
 
-O modelo existente é preservado. A utilização consome os créditos disponíveis no Lovable e depende das políticas de acesso e retenção de dados da conta; não existe garantia de utilização gratuita ilimitada. Não são ativados pagamentos, upgrades ou substituições automáticas de modelo. Se o Gemini for recusado pela política da conta, o teste apresenta essa limitação sem alegar sucesso.
+O teste de ligação e a conversa usam exatamente o mesmo fornecedor e modelo. O estado **Ligado** só aparece depois de uma resposta não vazia. Erros de autenticação, modelo, saldo, quota e comunicação são apresentados sem expor a chave ou detalhes internos. Não há repetição automática nem fallback para Lovable AI.
 
-Nunca colocar credenciais em `.env` versionado, no navegador, em variáveis `VITE_*`, em mensagens ou commits. A janela da Nuvem não recebe chaves e não simula a gravação de Secrets. Para uma futura chave própria, usar exclusivamente o formulário seguro do Lovable e publicar para atualizar a versão publicada.
+O catálogo da conta indica este modelo como chat gratuito (preço de entrada e saída a zero). A disponibilidade pode mudar e o identificador deve continuar autorizado na conta. O identificador inicial foi selecionado a partir do catálogo Z Router: `openrouter/baidu/ernie-5.5-flash-preview:free`.
 
-## Voz
+**Saldo zero:** quando o Z Router não tem saldo/crédito suficiente, a API pode devolver HTTP 402. O Caçador mostra que a ligação está configurada mas sem crédito para responder. Não ativa pagamentos, recargas ou upgrades e não tenta outro fornecedor. Não foi feita uma chamada real de teste durante esta alteração para evitar consumo ou uma falha desnecessária com saldo zero.
+
+Documentação: https://www.zrouter.com/docs/ e https://www.zrouter.com/docs/api-reference.php.
+
+## Conversa por voz
 
 A interface usa as APIs de voz do navegador:
-- SpeechRecognition / webkitSpeechRecognition para transcrever a fala;
-- SpeechSynthesis para ler as respostas.
 
-O suporte depende do navegador, do sistema operativo, da ligação à internet e das permissões do microfone. A experiência mais compatível é normalmente no Chrome atualizado. A voz não é uma chamada telefónica nem uma sessão de áudio contínua em tempo real.
+- SpeechRecognition / webkitSpeechRecognition para ouvir e transcrever a fala;
+- SpeechSynthesis para ler as respostas;
+- a fala reconhecida é enviada automaticamente ao modelo, sem um segundo toque em Enviar.
+
+A língua de reconhecimento e da leitura está definida para português (Portugal), uma opção de compatibilidade próxima do português de Angola. O assistente é instruído a responder em português de Angola.
+
+O suporte depende do navegador, do sistema operativo, da ligação à internet e da permissão do microfone. Usa a aplicação num endereço HTTPS e permite o acesso ao microfone. Chrome atualizado é normalmente a opção mais compatível. A implementação é conversa por turnos, não uma chamada de áudio contínua em tempo real. O reconhecimento e a leitura de voz do navegador não usam créditos de síntese de voz do Z Router.
 
 ## Canva MCP: ativação necessária
 
@@ -40,8 +51,9 @@ O Canva Free permite várias funções essenciais de geração, edição, pesqui
 
 ## Limites desta fase
 
-- A IA conversa e ajuda a planear, mas ainda não executa prospeção web autónoma.
-- O microfone e a leitura de voz dependem do navegador.
+- A conversa por IA depende de uma chave válida, modelo autorizado e saldo/crédito Z Router.
+- O microfone e a leitura de voz dependem do navegador e das permissões locais.
+- A IA ainda não executa prospeção web autónoma.
 - A integração Canva MCP ainda aguarda a aplicação OAuth e as respetivas credenciais.
 - O Caçador não envia contactos nem publica websites automaticamente.
 - Não foi introduzido nenhum serviço pago obrigatório nem compra de domínio.
