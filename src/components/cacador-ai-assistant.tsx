@@ -4,6 +4,17 @@ import { askCacadorLocalAI, loadCacadorLocalAI, type LocalAIProgress } from "@/l
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandSparkles } from "lucide-react";
 
 type ChatLine = { role: "user" | "assistant"; text: string };
+const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
+function readStoredMessages(): ChatLine[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) ?? "[]");
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is ChatLine => Boolean(item) && typeof item === "object" &&
+      ((item as ChatLine).role === "user" || (item as ChatLine).role === "assistant") &&
+      typeof (item as ChatLine).text === "string").slice(-100);
+  } catch { return []; }
+}
 type SpeechRecognitionResultLike = { 0?: { transcript?: string }; isFinal?: boolean };
 type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultLike> };
 type SpeechRecognitionLike = {
@@ -25,9 +36,12 @@ export function CacadorAIAssistant() {
   const [localReady, setLocalReady] = useState(false);
   const [loadingModel, setLoadingModel] = useState(false);
   const [modelProgress, setModelProgress] = useState<LocalAIProgress>({ percent: 0, text: "IA local ainda não carregada" });
-  const [messages, setMessages] = useState<ChatLine[]>([
-    { role: "assistant", text: "Olá! Sou o Caçador. Posso ajudar-te a analisar oportunidades, preparar abordagens comerciais e planear websites. Escreve ou usa o microfone para falar comigo." }
-  ]);
+  const [messages, setMessages] = useState<ChatLine[]>(() => {
+    const stored = readStoredMessages();
+    return stored.length ? stored : [
+      { role: "assistant", text: "Olá! Sou o Caçador. Posso ajudar-te a analisar oportunidades, preparar abordagens comerciais e planear websites. Escreve ou usa o microfone para falar comigo." }
+    ];
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [speaking, setSpeaking] = useState(true);
@@ -41,6 +55,10 @@ export function CacadorAIAssistant() {
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, busy]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-100))); } catch { /* Storage may be unavailable or full. */ }
+  }, [messages]);
 
   useEffect(() => () => {
     recognition.current?.stop();
@@ -96,17 +114,17 @@ export function CacadorAIAssistant() {
     event?.preventDefault();
     const message = (prompt ?? input).trim();
     if (!message || busy) return;
+    if (!localReady) {
+      setAiError("Carrega primeiro em «Ativar IA local» para descarregar o modelo gratuito para este dispositivo.");
+      setInput(message);
+      return;
+    }
     const next = [...messages, { role: "user" as const, text: message }];
     setMessages(next);
     setInput("");
     setBusy(true);
     setAiError("");
     try {
-      if (!localReady) {
-        setAiError("Carrega primeiro em «Ativar IA local» para descarregar o modelo gratuito para este dispositivo.");
-        setInput(message);
-        return;
-      }
       const history = next.slice(-10).map((line) => ({ role: line.role, content: line.text }));
       const answer = await askCacadorLocalAI(history);
       setMessages((previous) => [...previous, { role: "assistant", text: answer }]);
