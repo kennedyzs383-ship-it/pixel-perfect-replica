@@ -95,7 +95,7 @@ export function CacadorAIAssistant() {
         setBusy(true);
         setAiError("");
         try {
-          const context = messagesRef.current.slice(-8).map(line =>
+          const context = messagesRef.current.slice(-8).concat(customerLine).map(line =>
             (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
           ).join("\\n");
           const result = await askCacadorWithMcpFn({
