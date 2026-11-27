@@ -37,7 +37,7 @@ export const askCacadorAI = createServerFn({ method: "POST" })
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
-            content: (data.context ? "Contexto da conversa:\\n" + data.context + "\\n\\n" : "") + data.message,
+            content: (data.context ? "Contexto da conversa:\n" + data.context + "\n\n" : "") + data.message,
           },
         ],
         temperature: 0.55,
@@ -67,7 +67,7 @@ export const askCacadorAI = createServerFn({ method: "POST" })
     const answer = (typeof content === "string"
       ? content
       : Array.isArray(content)
-        ? content.map((part) => part.text ?? "").join("\\n")
+        ? content.map((part) => part.text ?? "").join("\n")
         : "").trim();
 
     if (!answer) throw new Error("O Caçador não recebeu uma resposta utilizável do Z Router.");
