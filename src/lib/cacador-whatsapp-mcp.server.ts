@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const CustomerSchema = z.string().trim().regex(/^\+?[1-9]\\d{7,14}$/, 'Indica o número WhatsApp do cliente em formato internacional.');
+const CustomerSchema = z.string().trim().regex(/^\+?[1-9]\d{7,14}$/, 'Indica o número WhatsApp do cliente em formato internacional.');
 const CallPermissionSchema = z.object({
   to: CustomerSchema,
   message: z.string().trim().min(1).max(1024).default('Gostaríamos de falar contigo por chamada WhatsApp sobre a nossa proposta. Autorizas que te liguemos?'),
