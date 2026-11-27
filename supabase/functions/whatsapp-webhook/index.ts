@@ -59,6 +59,78 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
   return delivered;
 }
 
+
+async function broadcastIncomingMessages(payload: Record<string, unknown>): Promise<number> {
+  const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const configuredPhoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+  if (!ownerId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
+    throw new Error("WHATSAPP_OWNER_ID is not configured as a valid account UUID.");
+  }
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase server credentials are not configured for message delivery.");
+  if (!configuredPhoneNumberId || !/^\d{5,30}$/.test(configuredPhoneNumberId)) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID is not configured for message delivery.");
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  let delivered = 0;
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  for (const entry of entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      if (!isRecord(change) || change.field !== "messages" || !isRecord(change.value)) continue;
+      const value = change.value;
+      const metadata = isRecord(value.metadata) ? value.metadata : null;
+      if (metadata?.phone_number_id !== configuredPhoneNumberId) continue;
+      const incoming = Array.isArray(value.messages) ? value.messages : [];
+      const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+      const topic = "whatsapp-calls:" + ownerId;
+      for (const item of incoming) {
+        if (!isRecord(item) || typeof item.from !== "string" || !/^\d{8,15}$/.test(item.from) ||
+          typeof item.id !== "string" || item.id.length < 8 || item.id.length > 200) continue;
+        const type = typeof item.type === "string" ? item.type : "unknown";
+        let messageText = "";
+        if (type === "text" && isRecord(item.text) && typeof item.text.body === "string") {
+          messageText = item.text.body;
+        } else if (type === "interactive" && isRecord(item.interactive)) {
+          const interactive = item.interactive;
+          if (isRecord(interactive.button_reply) && typeof interactive.button_reply.title === "string") messageText = interactive.button_reply.title;
+          else if (isRecord(interactive.list_reply) && typeof interactive.list_reply.title === "string") messageText = interactive.list_reply.title;
+        } else if (type === "button" && isRecord(item.button) && typeof item.button.text === "string") {
+          messageText = item.button.text;
+        }
+        if (!messageText.trim()) continue;
+        const contact = contacts.find((candidate) => isRecord(candidate) && candidate.wa_id === item.from);
+        const contactName = isRecord(contact) && isRecord(contact.profile) && typeof contact.profile.name === "string"
+          ? contact.profile.name.slice(0, 120)
+          : null;
+        const channel = supabase.channel(topic, { config: { private: true } });
+        const result = await channel.send({
+          type: "broadcast",
+          event: "incoming_message",
+          payload: {
+            message_id: item.id,
+            from: item.from,
+            timestamp: typeof item.timestamp === "string" ? item.timestamp : null,
+            message_type: type,
+            text: messageText.slice(0, 4096),
+            contact_name: contactName,
+            phone_number_id: configuredPhoneNumberId,
+            received_at: new Date().toISOString(),
+          },
+        });
+        await supabase.removeChannel(channel);
+        if (result !== "ok") throw new Error("Realtime message broadcast failed: " + String(result));
+        delivered += 1;
+      }
+    }
+  }
+  return delivered;
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -155,19 +227,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
       isRecord(entry) && Array.isArray(entry.changes) &&
       entry.changes.some((change) => isRecord(change) && change.field === "calls")
     );
+    const hasMessageEvents = entries.some((entry) =>
+      isRecord(entry) && Array.isArray(entry.changes) &&
+      entry.changes.some((change) => isRecord(change) && change.field === "messages")
+    );
 
-    if (hasCallEvents) {
-      try {
-        const delivered = await broadcastCallEvents(payload);
-        return json({ received: true, processed: true, call_events_forwarded: delivered });
-      } catch (error) {
-        console.error("[whatsapp-webhook] call signaling forward failed:", error);
-        return json({ error: "Call signaling is temporarily unavailable" }, 503);
-      }
+    let callEventsForwarded = 0;
+    let messagesForwarded = 0;
+    try {
+      if (hasCallEvents) callEventsForwarded = await broadcastCallEvents(payload);
+      if (hasMessageEvents) messagesForwarded = await broadcastIncomingMessages(payload);
+    } catch (error) {
+      console.error("[whatsapp-webhook] event forwarding failed:", error);
+      return json({ error: "WhatsApp event delivery is temporarily unavailable" }, 503);
     }
-
-    // Message events are acknowledged but not processed in this voice-only phase.
-    return json({ received: true, processed: false });
+    return json({
+      received: true,
+      processed: hasCallEvents || hasMessageEvents,
+      call_events_forwarded: callEventsForwarded,
+      messages_forwarded: messagesForwarded,
+    });
   }
 
   return new Response("Method not allowed", {
