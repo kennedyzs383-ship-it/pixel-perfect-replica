@@ -23,7 +23,7 @@ export function parseWhatsAppCallEvents(value: unknown): WhatsAppCallEvent[] {
   return value.flatMap((item): WhatsAppCallEvent[] => {
     if (!isRecord(item)) return [];
     const session = isRecord(item.session) ? item.session : null;
-    return [{
+    const normalized: WhatsAppCallEvent = {
       ...(typeof item.id === "string" ? { id: item.id } : {}),
       ...(typeof item.from === "string" ? { from: item.from } : {}),
       ...(typeof item.to === "string" ? { to: item.to } : {}),
@@ -35,7 +35,8 @@ export function parseWhatsAppCallEvents(value: unknown): WhatsAppCallEvent[] {
           ...(typeof session.sdp === "string" ? { sdp: session.sdp } : {}),
         },
       } : {}),
-    }];
+    };
+    return Object.keys(normalized).length ? [normalized] : [];
   });
 }
 
@@ -43,12 +44,13 @@ export function parseWhatsAppCallStatuses(value: unknown): WhatsAppCallStatus[] 
   if (!Array.isArray(value)) return [];
   return value.flatMap((item): WhatsAppCallStatus[] => {
     if (!isRecord(item)) return [];
-    return [{
+    const normalized: WhatsAppCallStatus = {
       ...(typeof item.id === "string" ? { id: item.id } : {}),
       ...(typeof item.call_id === "string" ? { call_id: item.call_id } : {}),
       ...(typeof item.status === "string" ? { status: item.status } : {}),
       ...(typeof item.event === "string" ? { event: item.event } : {}),
-    }];
+    };
+    return Object.keys(normalized).length ? [normalized] : [];
   });
 }
 
