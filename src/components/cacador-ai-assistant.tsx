@@ -30,7 +30,7 @@ export function CacadorAIAssistant() {
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [aiError, setAiError] = useState("");
-  const recognition = useRef<SpeechRecognitionLike | null>(null);
+  const recognition = useRef<SpeechRecognitionLike | null>(null);\n  const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export function CacadorAIAssistant() {
     instance.interimResults = false;
     instance.onresult = (event) => {
       const transcript = Array.from(event.results).map((item) => item[0]?.transcript ?? "").join(" ").trim();
-      if (transcript) setInput((previous) => previous ? previous + " " + transcript : transcript);
+      if (transcript) sendVoicePrompt.current?.(transcript);
     };
     instance.onerror = () => {
       setVoiceError("Não foi possível captar a voz. Verifica a permissão do microfone.");
@@ -111,13 +111,13 @@ export function CacadorAIAssistant() {
   return <section className="hunter-ai">
     <div className="hunter-ai-head">
       <div className="hunter-ai-icon"><Bot size={20}/></div>
-      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span><i/> Assistente conversacional · Gemini</span></div>
+      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span><i/> Assistente conversacional · Z Router</span></div>
       <div className="hunter-ai-controls">
         <button type="button" className={speaking ? "ai-icon-btn active" : "ai-icon-btn"} onClick={() => { setSpeaking((value) => !value); if (speaking && "speechSynthesis" in window) window.speechSynthesis.cancel(); }} aria-label={speaking ? "Desativar voz" : "Ativar voz"} title={speaking ? "Desativar voz" : "Ativar voz"}>{speaking ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
-        <a className="ai-icon-btn" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" title="Configurar chave de IA"><ExternalLink size={15}/></a>
+        <a className="ai-icon-btn" href="https://www.zrouter.com/docs/" target="_blank" rel="noreferrer" title="Documentação Z Router"><ExternalLink size={15}/></a>
       </div>
     </div>
-    <div className="hunter-ai-intro"><Sparkles size={15}/> Fala naturalmente. O Caçador responde por texto e, quando a voz está ativa, também fala contigo.</div>
+    <div className="hunter-ai-intro"><Sparkles size={15}/> Carrega no microfone e fala. O Caçador envia a tua fala automaticamente e responde em voz alta.</div>
     <div className="hunter-ai-messages" aria-live="polite">
       {messages.map((line, index) => <div className={"hunter-ai-message " + line.role} key={index}><span>{line.role === "assistant" ? "CAÇADOR" : "TU"}</span><p>{line.text}</p></div>)}
       {busy && <div className="hunter-ai-message assistant"><span>CAÇADOR</span><p className="ai-thinking">A analisar o teu pedido…</p></div>}
@@ -127,7 +127,7 @@ export function CacadorAIAssistant() {
     {voiceError && <p className="hunter-ai-error">{voiceError}</p>}
     <form className="hunter-ai-compose" onSubmit={(event) => void send(event)}>
       <button type="button" className={listening ? "ai-mic-btn listening" : "ai-mic-btn"} onClick={toggleListening} aria-label={listening ? "Parar microfone" : "Falar com Caçador"} title={listening ? "Parar microfone" : "Falar com Caçador"}>{listening ? <MicOff size={17}/> : <Mic size={17}/>}</button>
-      <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ex.: prepara um website para uma clínica em Luanda…" aria-label="Mensagem para o Caçador"/>
+      <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Fala ou escreve aqui para conversar com o Caçador…" aria-label="Mensagem para o Caçador"/>
       <button className="ai-send-btn" type="submit" disabled={busy || !input.trim()} aria-label="Enviar mensagem"><Send size={16}/></button>
     </form>
     <div className="hunter-ai-quick">
