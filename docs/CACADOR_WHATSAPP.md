@@ -179,3 +179,23 @@ As funções também precisam das variáveis Supabase padrão `SUPABASE_URL`, `S
 ### Estado e limites
 
 O painel e o código de sinalização WebRTC foram implementados. As Edge Functions `whatsapp-webhook` e `whatsapp-call-control` já foram implantadas no projeto Supabase e estão ACTIVE; a política RLS do canal privado também foi aplicada e verificada. Ainda não se deve considerar a chamada real ativa: faltam configurar as secrets, subscrever `calls` na app Meta, ativar Calling no número Cloud API e confirmar a elegibilidade da conta. O browser usa STUN público como configuração inicial; redes NAT restritivas podem exigir servidor TURN. O browser precisa de permissão de microfone. A função de mensagens de webhook continua fora desta fase de chamadas.
+
+
+## Atualização: mensagens recebidas ligadas ao cérebro MCP
+
+Na branch atual da PR #19 foi acrescentado o encaminhamento de mensagens recebidas:
+
+1. A Edge Function verifica a assinatura HMAC da Meta e filtra o phone_number_id configurado.
+2. Mensagens de texto e respostas interativas suportadas são encaminhadas para o tópico privado whatsapp-calls:<WHATSAPP_OWNER_ID>, no evento incoming_message.
+3. O componente do cérebro em /cacador escuta esse evento e envia o texto e o contexto ao Z Router através de askCacadorWithMcpFn.
+4. O Caçador apresenta a mensagem recebida e a resposta preparada. Se o Z Router propuser send_text_message, a interface exige confirmação humana antes de executar o envio pela MCP integrada whatsapp-meta.
+5. O conteúdo da mensagem do cliente é tratado como dado não confiável e não pode alterar as regras do cérebro nem dispensar aprovações.
+
+### Limitações ainda abertas
+
+- O encaminhamento atual usa Supabase Realtime broadcast; não existe ainda uma inbox persistente. Se o painel do Caçador estiver desligado/desconectado, a mensagem pode não chegar à interface.
+- A deduplicação de IDs recebidos existe apenas em memória no navegador. Ainda falta deduplicação persistente no servidor para retries da Meta.
+- Nesta etapa são tratados texto e respostas interativas com texto. Transferência/download de áudio, imagem, vídeo e documentos e respetiva interpretação ainda não estão implementados.
+- A Edge Function alterada está versionada nesta branch, mas esta alteração ainda não foi publicada no Supabase. A versão ativa não deve ser considerada atualizada até um deploy autorizado.
+- As respostas são preparadas pelo Z Router, mas não são enviadas automaticamente. A confirmação humana continua obrigatória.
+- Testes automatizados e build desta alteração ainda precisam de ser executados; não há resultado de CI confirmado para este commit.
