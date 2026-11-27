@@ -372,10 +372,19 @@ export function CacadorWhatsAppCalling() {
   const hangUp = async () => {
     const callId = activeCallIdRef.current || activeCallId;
     setBusy(true);
+    let terminationError = "";
     try {
       if (callId) await callControl({ action: "terminate", call_id: callId });
-    } catch (error) { setStatus(error instanceof Error ? error.message : "Não foi possível terminar a chamada na Meta."); }
-    finally { cleanup(); setStatus("Chamada terminada."); setBusy(false); }
+    } catch (error) {
+      terminationError = error instanceof Error ? error.message : "Não foi possível terminar a chamada na Meta.";
+    } finally {
+      // Always stop local media, but never hide a failed remote terminate request.
+      cleanup();
+      setStatus(terminationError
+        ? `Áudio local desligado, mas a Meta não confirmou o fim da chamada: ${terminationError}`
+        : "Chamada terminada.");
+      setBusy(false);
+    }
   };
 
   const toggleMute = () => {
