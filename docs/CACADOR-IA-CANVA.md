@@ -7,7 +7,7 @@ Esta extensão mantém a autenticação, o CRM, o editor e as restantes funciona
 O Caçador usa a API compatível com OpenAI do Z Router através de uma função executada exclusivamente no servidor.
 
 - Secret obrigatória no Lovable: `ZROUTER_API_KEY`.
-- Modelo predefinido: `openrouter/google/gemini-2.5-flash`.
+- Modelo predefinido: `openrouter/baidu/ernie-5.5-flash-preview:free`.
 - Modelo alternativo opcional: `ZROUTER_MODEL`, usando o identificador exato do catálogo da conta.
 - Endpoint: `https://www.zrouter.com/v1/chat/completions`.
 
@@ -15,7 +15,7 @@ A chave privada deve ficar em **Lovable → Secrets**. Nunca a coloques em fiche
 
 O teste de ligação e a conversa usam exatamente o mesmo fornecedor e modelo. O estado **Ligado** só aparece depois de uma resposta não vazia. Erros de autenticação, modelo, saldo, quota e comunicação são apresentados sem expor a chave ou detalhes internos. Não há repetição automática nem fallback para Lovable AI.
 
-O catálogo da conta deve confirmar que o modelo está autorizado. O identificador inicial foi selecionado a partir do catálogo Z Router: `openrouter/google/gemini-2.5-flash`.
+O catálogo da conta indica este modelo como chat gratuito (preço de entrada e saída a zero). A disponibilidade pode mudar e o identificador deve continuar autorizado na conta. O identificador inicial foi selecionado a partir do catálogo Z Router: `openrouter/baidu/ernie-5.5-flash-preview:free`.
 
 **Saldo zero:** quando o Z Router não tem saldo/crédito suficiente, a API pode devolver HTTP 402. O Caçador mostra que a ligação está configurada mas sem crédito para responder. Não ativa pagamentos, recargas ou upgrades e não tenta outro fornecedor. Não foi feita uma chamada real de teste durante esta alteração para evitar consumo ou uma falha desnecessária com saldo zero.
 
