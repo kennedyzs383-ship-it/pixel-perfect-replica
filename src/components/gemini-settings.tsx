@@ -3,6 +3,7 @@ import { Bot, CheckCircle2, CircleOff, KeyRound, LoaderCircle, PlugZap, ShieldCh
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useCacadorConnection } from '@/hooks/use-cacador-connection';
+import { UniversalAIHub } from '@/components/universal-ai-hub';
 
 export function GeminiSettings() {
   const [open, setOpen] = useState(false);
@@ -16,6 +17,7 @@ export function GeminiSettings() {
       <DialogHeader><DialogTitle>Z Router</DialogTitle><DialogDescription>Ligação do cérebro do Caçador ao modelo ERNIE 5.5 Flash Preview (gratuito) através do Z Router.</DialogDescription></DialogHeader>
       {open && <GeminiConnectionPanel/>}
     </DialogContent></Dialog>
+    <UniversalAIHub />
   </section>;
 }
 
