@@ -239,6 +239,10 @@ export function CacadorWhatsAppCalling() {
 
       if (call.session?.sdp && call.session.sdp_type === "answer" && peerRef.current) {
         if (callId && currentActiveCallId && callId !== currentActiveCallId) continue;
+        // Meta may retry webhook deliveries. Applying the same SDP answer twice
+        // can fail because the peer connection has already left the offer state.
+        const appliedDescription = peerRef.current.remoteDescription;
+        if (appliedDescription?.type === "answer" && appliedDescription.sdp === call.session.sdp) continue;
         await peerRef.current.setRemoteDescription({ type: "answer", sdp: call.session.sdp });
         if (callId) {
           activeCallIdRef.current = callId;
@@ -247,6 +251,9 @@ export function CacadorWhatsAppCalling() {
         setStatus("Resposta recebida. A ligar o áudio…");
       } else if (call.session?.sdp && call.session.sdp_type === "offer" && callId) {
         if (currentActiveCallId || (currentIncoming?.id && currentIncoming.id !== callId)) continue;
+        // Repeated delivery of the same incoming offer must not reset the
+        // pending invitation or replace an offer the operator is already viewing.
+        if (currentIncoming?.id === callId && currentIncoming.session?.sdp === call.session.sdp) continue;
         incomingRef.current = call;
         setIncoming(call);
         setStatus("Chamada WhatsApp recebida. Podes atender ou rejeitar.");
