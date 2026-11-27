@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, CircleOff, Cpu, PlugZap, RefreshCw, Server, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getOllamaSettings, saveOllamaSettings, testOllamaConnection, type OllamaSettings } from "@/lib/cacador-ai-providers";
+import { CacadorMcpPanel } from "@/components/cacador-mcp-panel";
 
 export function UniversalAIHub() {
   const [settings, setSettings] = useState<OllamaSettings>(() => getOllamaSettings());
@@ -34,7 +35,7 @@ export function UniversalAIHub() {
       <div className="rounded-lg border border-border p-4 space-y-2"><div className="flex items-center gap-2"><Cpu className="size-5"/><strong className="text-sm">Qwen local no navegador</strong></div><p className="text-xs text-muted-foreground">Wllama + Qwen 0.5B. Sem chave e sem custo por mensagem depois do download inicial.</p><span className="text-xs text-emerald-700">Já integrado no Caçador</span></div>
       <div className="rounded-lg border border-border p-4 space-y-2"><div className="flex items-center gap-2"><Server className="size-5"/><strong className="text-sm">Ollama · modelos locais</strong></div><p className="text-xs text-muted-foreground">Liga modelos instalados no teu computador ou servidor. Não exige API paga; o equipamento executa o modelo.</p><span className="text-xs text-primary">Configuração disponível abaixo</span></div>
       <div className="rounded-lg border border-border p-4 space-y-2"><div className="flex items-center gap-2"><PlugZap className="size-5"/><strong className="text-sm">Z Router · modelos cloud</strong></div><p className="text-xs text-muted-foreground">Mantém a ligação atual no servidor, usando a secret já configurada. Pode ter limites, créditos ou custos do fornecedor.</p><span className="text-xs text-emerald-700">Integração existente preservada</span></div>
-      <div className="rounded-lg border border-border p-4 space-y-2"><div className="flex items-center gap-2"><ShieldCheck className="size-5"/><strong className="text-sm">MCP · ferramentas externas</strong></div><p className="text-xs text-muted-foreground">Camada de ferramentas planeada separadamente dos modelos. Cada servidor MCP exigirá ligação e permissões próprias.</p><span className="text-xs text-muted-foreground">Preparação arquitetural · não ligado ainda</span></div>
+      <div className="rounded-lg border border-border p-4 space-y-2"><div className="flex items-center gap-2"><ShieldCheck className="size-5"/><strong className="text-sm">MCP · ferramentas externas</strong></div><p className="text-xs text-muted-foreground">Camada de ferramentas planeada separadamente dos modelos. Cada servidor MCP exigirá ligação e permissões próprias.</p><span className="text-xs text-muted-foreground">Cliente MCP HTTP implementado</span></div>
     </div>
     <div className="space-y-3 rounded-lg border border-border p-4">
       <div><h3 className="text-sm font-semibold">Ligar Ollama</h3><p className="text-xs text-muted-foreground">Instala o Ollama no computador/servidor e permite acesso de rede/CORS a partir deste endereço do Caçador.</p></div>
@@ -45,6 +46,7 @@ export function UniversalAIHub() {
       {models.length > 0 && <p className="text-xs text-muted-foreground">Modelos detetados: {models.join(" · ")}</p>}
       <p className="text-xs text-muted-foreground">A configuração fica guardada apenas neste navegador. Não introduzas aqui chaves API. Para acesso a partir de outro dispositivo, usa o endereço de rede do servidor e configura o CORS/firewall do Ollama com cuidado.</p>
     </div>
+    <CacadorMcpPanel />
     <p className="text-xs text-muted-foreground">Nota: GPT, Claude e Gemini não ficam automaticamente gratuitos por serem adicionados ao centro. Cada serviço cloud pode exigir conta, chave, autorização ou pagamento. O MCP também não fornece modelos nem elimina esses requisitos.</p>
   </section>;
 }
