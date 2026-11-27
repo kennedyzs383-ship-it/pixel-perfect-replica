@@ -6,6 +6,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function contactNameFrom(contacts: unknown[], phone: string): string | null {
+  const contact = contacts.find((candidate) => isRecord(candidate) && candidate.wa_id === phone);
+  return isRecord(contact) && isRecord(contact.profile) && typeof contact.profile.name === "string"
+    ? contact.profile.name.slice(0, 120)
+    : null;
+}
+
+function metaTimestamp(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\\d{1,12}$/.test(value)) return null;
+  const date = new Date(Number(value) * 1000);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 async function broadcastCallEvents(payload: Record<string, unknown>): Promise<number> {
   const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -108,7 +121,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
               : null,
             media_id: mediaPayload && typeof mediaPayload.id === "string" ? mediaPayload.id : null,
             media_mime_type: mediaPayload && typeof mediaPayload.mime_type === "string" ? mediaPayload.mime_type : null,
-            meta_timestamp: typeof item.timestamp === "string" ? item.timestamp : null,
+            meta_timestamp: metaTimestamp(item.timestamp),
             phone_number_id: configuredPhoneNumberId,
             raw_message: item,
           }, { onConflict: "owner_id,message_id", ignoreDuplicates: true });
@@ -124,10 +137,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
           messageText = item.button.text;
         }
         if (!messageText.trim()) continue;
-        const contact = contacts.find((candidate) => isRecord(candidate) && candidate.wa_id === item.from);
-        const contactName = isRecord(contact) && isRecord(contact.profile) && typeof contact.profile.name === "string"
-          ? contact.profile.name.slice(0, 120)
-          : null;
+        const contactName = contactNameFrom(contacts, item.from);
         const channel = supabase.channel(topic, { config: { private: true } });
         const result = await channel.send({
           type: "broadcast",
