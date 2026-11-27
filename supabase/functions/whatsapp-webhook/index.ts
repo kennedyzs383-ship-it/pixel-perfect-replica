@@ -1,4 +1,55 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
 const encoder = new TextEncoder();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function broadcastCallEvents(payload: Record<string, unknown>): Promise<number> {
+  const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!ownerId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
+    throw new Error("WHATSAPP_OWNER_ID is not configured as a valid account UUID.");
+  }
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Supabase server credentials are not configured for call signaling.");
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  let delivered = 0;
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  for (const entry of entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      if (!isRecord(change) || change.field !== "calls" || !isRecord(change.value)) continue;
+      const value = change.value;
+      const calls = Array.isArray(value.calls) ? value.calls : [];
+      const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+      const topic = `whatsapp-calls:${ownerId}`;
+      const channel = supabase.channel(topic, { config: { private: true } });
+      const result = await channel.send({
+        type: "broadcast",
+        event: "call_signal",
+        payload: {
+          entry_id: isRecord(entry) ? entry.id : null,
+          metadata: value.metadata ?? null,
+          calls,
+          statuses,
+          errors: value.errors ?? null,
+          received_at: new Date().toISOString(),
+        },
+      });
+      await supabase.removeChannel(channel);
+      if (result !== "ok") throw new Error(`Realtime broadcast failed: ${String(result)}`);
+      delivered += calls.length + statuses.length;
+    }
+  }
+  return delivered;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -87,18 +138,27 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    // Acknowledge only verified Meta deliveries. Event persistence and message
-    // processing are intentionally not enabled until the owner-scoped storage
-    // model and retention policy are in place.
-    const objectType =
-      typeof payload === "object" && payload !== null && "object" in payload
-        ? String((payload as { object?: unknown }).object ?? "")
-        : "";
-
-    if (objectType !== "whatsapp_business_account") {
+    if (!isRecord(payload) || payload.object !== "whatsapp_business_account") {
       return json({ error: "Unsupported webhook object" }, 400);
     }
 
+    const entries = Array.isArray(payload.entry) ? payload.entry : [];
+    const hasCallEvents = entries.some((entry) =>
+      isRecord(entry) && Array.isArray(entry.changes) &&
+      entry.changes.some((change) => isRecord(change) && change.field === "calls")
+    );
+
+    if (hasCallEvents) {
+      try {
+        const delivered = await broadcastCallEvents(payload);
+        return json({ received: true, processed: true, call_events_forwarded: delivered });
+      } catch (error) {
+        console.error("[whatsapp-webhook] call signaling forward failed:", error);
+        return json({ error: "Call signaling is temporarily unavailable" }, 503);
+      }
+    }
+
+    // Message events are acknowledged but not processed in this voice-only phase.
     return json({ received: true, processed: false });
   }
 

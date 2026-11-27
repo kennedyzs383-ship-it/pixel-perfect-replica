@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CacadorWhatsAppCalling } from "../components/cacador-whatsapp-calling";
 import { ArrowLeft, ArrowUpRight, CheckCircle2, CircleDashed, LockKeyhole, MessageCircle, Phone, ShieldCheck, Smartphone, Webhook } from "lucide-react";
 
 export const Route = createFileRoute("/cacador/whatsapp")({
@@ -98,6 +99,8 @@ function CacadorWhatsAppPage() {
           );
         })}
       </section>
+
+      <CacadorWhatsAppCalling />
 
       <section style={{ background: "#fff", border: "1px solid #e7e8ef", borderRadius: 14, padding: 19, marginTop: 16 }}>
         <h2 style={{ fontSize: 17, margin: "0 0 12px" }}>O que o Caçador vai preparar</h2>

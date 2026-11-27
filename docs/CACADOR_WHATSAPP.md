@@ -149,3 +149,33 @@ O provider `whatsapp-meta` anuncia agora estas ferramentas de sinalização de c
 Esta entrega acrescenta o controlo/sinalização Meta no servidor MCP, mas ainda não inclui o motor de áudio WebRTC do Caçador nem o transporte dos eventos `field=calls`/SDP answer do webhook até uma sessão WebRTC ativa. Portanto, ainda não permite uma conversa de voz real ponta a ponta. Não enviar SDP inventado. Para completar chamadas reais, falta integrar o runtime WebRTC (microfone/altifalante, ICE e peer connection), entregar os eventos `calls` em tempo real à sessão e testar com um número Cloud API elegível. A coexistência do número Business atual não é considerada compatível com chamadas API; manter esse número sem alterações.
 
 As chamadas iniciadas pela empresa exigem autorização explícita do cliente, obtida através do pedido de permissão ou outra forma reconhecida pela Meta. O cliente pode recusar e a permissão pode expirar. Não iniciar chamadas sem autorização nem fazer chamadas em massa.
+
+
+## Sinalização de chamadas em tempo real
+
+A Edge Function `whatsapp-webhook` encaminha eventos Meta com `field=calls` para um canal privado Supabase Realtime `whatsapp-calls:<WHATSAPP_OWNER_ID>`. A política RLS de `realtime.messages` permite receber broadcasts apenas quando o tópico corresponde ao UUID do utilizador autenticado. O SDP é encaminhado em tempo real e não é persistido numa tabela.
+
+A rota `/cacador/whatsapp` inclui o painel de chamadas WebRTC:
+- pedir permissão de chamada ao cliente;
+- iniciar chamada de saída com uma oferta SDP criada no navegador;
+- receber a resposta SDP da Meta pelo webhook;
+- atender chamadas recebidas, criando resposta SDP e enviando `pre_accept` e `accept`;
+- silenciar microfone e terminar chamada.
+
+Foi adicionada a Edge Function autenticada `whatsapp-call-control`, que valida o JWT do utilizador, compara-o com `WHATSAPP_OWNER_ID` e executa ações Calling API sem expor o token Meta no navegador.
+
+### Configuração adicional obrigatória
+
+Guardar nas Edge Function Secrets, sem as colocar no código ou no chat:
+- `WHATSAPP_OWNER_ID`: UUID do utilizador proprietário da conta Caçador;
+- `WHATSAPP_ACCESS_TOKEN`;
+- `WHATSAPP_PHONE_NUMBER_ID`;
+- `WHATSAPP_GRAPH_API_VERSION` (formato `vNN.N`);
+- `WHATSAPP_VERIFY_TOKEN`;
+- `META_APP_SECRET`.
+
+As funções também precisam das variáveis Supabase padrão `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_ANON_KEY`/ `SUPABASE_PUBLISHABLE_KEY`.
+
+### Estado e limites
+
+O painel e o código de sinalização WebRTC foram implementados, mas ainda não se deve considerar a chamada real ativa: as Edge Functions ainda precisam de deployment/configuração de secrets, a app Meta tem de subscrever `calls`, o número Cloud API tem de ter Calling ativado e a conta tem de ser elegível. O browser usa STUN público como configuração inicial; redes NAT restritivas podem exigir servidor TURN. O browser precisa de permissão de microfone. A função de mensagens de webhook continua fora desta fase de chamadas.
