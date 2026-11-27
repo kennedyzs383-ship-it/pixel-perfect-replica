@@ -3,6 +3,7 @@ import { Phone, PhoneCall, PhoneOff, Mic, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
 import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-voice.functions";
+import { getWhatsAppCallId, isTerminalWhatsAppCallStatus, statusBelongsToCall } from "@/lib/cacador-call-events";
 
 type CallEvent = {
   id?: string;
@@ -224,26 +225,42 @@ export function CacadorWhatsAppCalling() {
     const calls = Array.isArray(payload.calls) ? payload.calls as CallEvent[] : [];
     for (const call of calls) {
       const event = String(call.event ?? "").toLowerCase();
-      if (event === "terminate" || event === "terminated") {
+      const callId = getWhatsAppCallId(call);
+      const belongsToActive = Boolean(callId && callId === activeCallId);
+      const belongsToIncoming = Boolean(callId && callId === incoming?.id);
+
+      // Ignore late events from previous calls; stale termination must not
+      // close the peer connection belonging to a newer call.
+      if ((event === "terminate" || event === "terminated") && (belongsToActive || belongsToIncoming)) {
         cleanup();
         setStatus("Chamada terminada.");
         continue;
       }
+
       if (call.session?.sdp && call.session.sdp_type === "answer" && peerRef.current) {
+        if (callId && activeCallId && callId !== activeCallId) continue;
         await peerRef.current.setRemoteDescription({ type: "answer", sdp: call.session.sdp });
-        if (call.id) setActiveCallId(call.id);
+        if (callId) setActiveCallId(callId);
         setStatus("Resposta recebida. A ligar o áudio…");
-      } else if (call.session?.sdp && call.session.sdp_type === "offer" && call.id) {
+      } else if (call.session?.sdp && call.session.sdp_type === "offer" && callId) {
+        if (activeCallId || (incoming?.id && incoming.id !== callId)) continue;
         setIncoming(call);
         setStatus("Chamada WhatsApp recebida. Podes atender ou rejeitar.");
       }
     }
+
     const statuses = Array.isArray(payload.statuses) ? payload.statuses as Array<Record<string, unknown>> : [];
-    if (statuses.some((item) => ["TERMINATE", "TERMINATED", "COMPLETED", "REJECTED", "FAILED"].includes(String(item.status ?? item.event ?? "").toUpperCase()))) {
+    const currentCallId = activeCallId || incoming?.id || "";
+    const terminalStatus = statuses.find((item) =>
+      isTerminalWhatsAppCallStatus(item.status ?? item.event) &&
+      statusBelongsToCall(item, currentCallId),
+    );
+    if (terminalStatus) {
       cleanup();
       setStatus("A chamada terminou ou foi recusada.");
     }
-  }, [cleanup]);
+    // ACCEPTED is informational and may arrive after media is connected.
+  }, [activeCallId, incoming, cleanup]);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
