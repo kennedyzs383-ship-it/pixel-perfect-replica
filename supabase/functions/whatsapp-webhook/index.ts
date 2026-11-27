@@ -17,7 +17,7 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Supabase server credentials are not configured for call signaling.");
   }
-  if (!configuredPhoneNumberId || !/^\\d{5,30}$/.test(configuredPhoneNumberId)) {
+  if (!configuredPhoneNumberId || !/^\d{5,30}$/.test(configuredPhoneNumberId)) {
     throw new Error("WHATSAPP_PHONE_NUMBER_ID is not configured for call signaling.");
   }
 
