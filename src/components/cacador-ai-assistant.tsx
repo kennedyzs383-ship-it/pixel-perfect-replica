@@ -129,7 +129,7 @@ export function CacadorAIAssistant() {
   return <section className="hunter-ai">
     <div className="hunter-ai-head">
       <div className="hunter-ai-icon"><Bot size={20}/></div>
-      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{checking ? "A verificar…" : connection.connected ? "Ligado" : "Não ligado"} · Z Router · Gemini 2.5 Flash</span></div>
+      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{checking ? "A verificar…" : connection.connected ? "Ligado" : "Não ligado"} · Z Router · ERNIE 5.5 Flash (gratuito)</span></div>
       <div className="hunter-ai-controls">
         <button type="button" className={speaking ? "ai-icon-btn active" : "ai-icon-btn"} onClick={() => { setSpeaking((value) => !value); if (speaking && "speechSynthesis" in window) window.speechSynthesis.cancel(); }} aria-label={speaking ? "Desativar voz" : "Ativar voz"} title={speaking ? "Desativar voz" : "Ativar voz"}>{speaking ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
         <Button variant="outline" size="icon" onClick={() => void check()} disabled={checking || busy} aria-label="Testar ligação" title="Testar ligação"><Sparkles size={15}/></Button>
