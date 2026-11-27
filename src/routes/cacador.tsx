@@ -43,7 +43,9 @@ function getResearchLinks(lead: Lead) {
   ];
   if (lead.website.trim()) {
     try {
-      const address = new URL(/^https?:\\/\\//i.test(lead.website) ? lead.website : "https://" + lead.website);
+      const websiteInput = lead.website.trim();
+      const normalizedInput = websiteInput.toLowerCase();
+      const address = new URL(normalizedInput.startsWith("http://") || normalizedInput.startsWith("https://") ? websiteInput : "https://" + websiteInput);
       if (address.protocol === "https:" || address.protocol === "http:") {
         links.push(
           { label: "PageSpeed", url: "https://pagespeed.web.dev/analysis?url=" + encodeURIComponent(address.href) },
