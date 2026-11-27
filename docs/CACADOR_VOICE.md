@@ -24,3 +24,8 @@ A chave nunca é enviada ao browser. As funções verificam a sessão autenticad
 5. O áudio sintetizado é injetado na ligação WebRTC.
 
 A disponibilidade real depende de o fornecedor aceitar os modelos e formatos configurados. O processamento por segmentos tem latência e não equivale a áudio full-duplex de baixa latência. Para produção, usar segmentos curtos, controlo de interrupção (barge-in), limites de duração e TURN/STUN adequado.
+
+
+## Captura de áudio na chamada
+
+A captura atual fecha cada gravação após aproximadamente 4 segundos e envia o ficheiro WebM completo, em vez de enviar fragmentos `MediaRecorder` isolados. Os segmentos são processados sequencialmente para evitar perdas por concorrência. Como o gravador só reinicia depois da transcrição, resposta do Z Router e síntese de voz, pode existir uma pausa de captura durante esse processamento; isto é um protótipo por segmentos, não uma experiência full-duplex contínua. Antes de produção, implementar deteção de voz/silêncio com buffer contínuo, interrupção da fala sintetizada (barge-in), limites de duração e testes reais em Android/iOS e redes móveis.
