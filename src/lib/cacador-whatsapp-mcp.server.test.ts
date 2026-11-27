@@ -34,6 +34,17 @@ describe('WhatsApp Calling permission gate', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/call_permissions?user_wa_id=244923000000');
   });
 
+  it('rejects non-boolean permission values even when they are truthy', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({
+      permission: { status: 'granted' },
+      actions: [{ action_name: 'start_call', can_perform_action: 'true' }],
+    }));
+
+    await expect(callWhatsAppMcpTool('manage_voice_call', callInput))
+      .rejects.toThrow('não confirmou explicitamente a ação start_call');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('starts a call only when Meta explicitly allows start_call', async () => {
     fetchMock
       .mockResolvedValueOnce(Response.json({
