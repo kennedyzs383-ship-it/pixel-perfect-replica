@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Phone, PhoneCall, PhoneOff, Mic, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
+import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-voice.functions";
 
 type CallEvent = {
   id?: string;
@@ -40,6 +42,10 @@ export function CacadorWhatsAppCalling() {
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const speechDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const voiceBusyRef = useRef(false);
 
   const cleanup = useCallback(() => {
     peerRef.current?.close();
