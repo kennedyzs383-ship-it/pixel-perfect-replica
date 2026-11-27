@@ -85,3 +85,25 @@ As tabelas não devem ser criadas até validar o projeto Supabase ligado, a pol�
 
 - WhatsApp Business Platform: https://developers.facebook.com/documentation/business-messaging/whatsapp/overview
 - Meta Business: https://business.facebook.com/
+
+
+## Webhook implementado na branch da PR
+
+Foi adicionada a Edge Function `whatsapp-webhook` em `supabase/functions/whatsapp-webhook/index.ts`.
+
+- GET: valida `hub.verify_token` com `WHATSAPP_VERIFY_TOKEN` e devolve `hub.challenge`.
+- POST: valida `X-Hub-Signature-256` com HMAC-SHA256 e `META_APP_SECRET`, rejeitando assinaturas inválidas.
+- O corpo é lido como texto bruto antes da validação da assinatura.
+- Não regista conteúdo de mensagens nem segredos nos logs.
+- Por enquanto, apenas confirma a receção de eventos válidos. A persistência, deduplicação e processamento de mensagens continuam desativados até existir um modelo de dados com isolamento por proprietário e política de retenção aprovada.
+
+### Segredos necessários no projeto Supabase O-CAÇADOR
+
+Configurar em Edge Functions → Secrets, sem os colocar no Git ou no frontend:
+
+- `WHATSAPP_VERIFY_TOKEN`: token aleatório criado para a verificação do callback.
+- `META_APP_SECRET`: App Secret da aplicação Meta.
+
+A URL pública da função será `https://emcdkxxmfqgejfmfpxwe.supabase.co/functions/v1/whatsapp-webhook`, depois de a função ser publicada. A publicação ainda não foi feita porque os segredos da Meta não foram fornecidos/configurados.
+
+O `supabase/config.toml` foi alinhado com o projeto ativo O-CAÇADOR e define `verify_jwt = false` apenas para esta função pública; a autenticação externa é feita pelo handshake e pela assinatura HMAC da Meta.
