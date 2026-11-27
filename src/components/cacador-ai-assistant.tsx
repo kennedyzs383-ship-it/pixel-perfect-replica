@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { useCacadorConnection } from "@/hooks/use-cacador-connection";
-import { failedConnection } from "@/lib/cacador-connection";
 import { Button } from "@/components/ui/button";
-import { askCacadorAI } from "../lib/cacador-ai.functions";
+import { askCacadorLocalAI, loadCacadorLocalAI, type LocalAIProgress } from "@/lib/cacador-local-ai";
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandSparkles } from "lucide-react";
 
 type ChatLine = { role: "user" | "assistant"; text: string };
@@ -25,8 +22,9 @@ type SpeechWindow = Window & {
 };
 
 export function CacadorAIAssistant() {
-  const ask = useServerFn(askCacadorAI);
-  const { connection, setConnection, checking, check } = useCacadorConnection();
+  const [localReady, setLocalReady] = useState(false);
+  const [loadingModel, setLoadingModel] = useState(false);
+  const [modelProgress, setModelProgress] = useState<LocalAIProgress>({ percent: 0, text: "IA local ainda não carregada" });
   const [messages, setMessages] = useState<ChatLine[]>([
     { role: "assistant", text: "Olá! Sou o Caçador. Posso ajudar-te a analisar oportunidades, preparar abordagens comerciais e planear websites. Escreve ou usa o microfone para falar comigo." }
   ]);
@@ -104,20 +102,17 @@ export function CacadorAIAssistant() {
     setBusy(true);
     setAiError("");
     try {
-      const context = next.slice(0, -1).slice(-8).map((line) => (line.role === "user" ? "Utilizador: " : "Caçador: ") + line.text).join("\n").slice(-4000);
-      const result = await ask({ data: { message, context } });
-      setConnection(result.connection);
-      if (!result.connection.connected) {
-        setAiError(result.connection.message);
+      if (!localReady) {
+        setAiError("Carrega primeiro em «Ativar IA local» para descarregar o modelo gratuito para este dispositivo.");
         setInput(message);
         return;
       }
-      setMessages((previous) => [...previous, { role: "assistant", text: result.answer }]);
-      speak(result.answer);
+      const history = next.slice(-10).map((line) => ({ role: line.role, content: line.text }));
+      const answer = await askCacadorLocalAI(history);
+      setMessages((previous) => [...previous, { role: "assistant", text: answer }]);
+      speak(answer);
     } catch (error) {
-      const failure = failedConnection('unavailable');
-      setConnection(failure);
-      setAiError(failure.message);
+      setAiError(error instanceof Error ? error.message : "A IA local não conseguiu responder.");
       setInput(message);
     } finally {
       setBusy(false);
@@ -129,20 +124,19 @@ export function CacadorAIAssistant() {
   return <section className="hunter-ai">
     <div className="hunter-ai-head">
       <div className="hunter-ai-icon"><Bot size={20}/></div>
-      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{checking ? "A verificar…" : connection.connected ? "Ligado" : "Não ligado"} · Z Router · ERNIE 5.5 Flash (gratuito)</span></div>
+      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{localReady ? "IA local pronta neste dispositivo" : loadingModel ? "A preparar IA local…" : "IA local desligada"} · Wllama · sem API Key</span></div>
       <div className="hunter-ai-controls">
         <button type="button" className={speaking ? "ai-icon-btn active" : "ai-icon-btn"} onClick={() => { setSpeaking((value) => !value); if (speaking && "speechSynthesis" in window) window.speechSynthesis.cancel(); }} aria-label={speaking ? "Desativar voz" : "Ativar voz"} title={speaking ? "Desativar voz" : "Ativar voz"}>{speaking ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
-        <Button variant="outline" size="icon" onClick={() => void check()} disabled={checking || busy} aria-label="Testar ligação" title="Testar ligação"><Sparkles size={15}/></Button>
+        <Button variant="outline" size="sm" onClick={() => { setLoadingModel(true); setAiError(""); void loadCacadorLocalAI(setModelProgress).then(() => { setLocalReady(true); setAiError(""); }).catch((error) => setAiError(error instanceof Error ? error.message : "Não foi possível carregar o modelo neste dispositivo.")).finally(() => setLoadingModel(false)); }} disabled={loadingModel || localReady || busy}><Sparkles size={14}/>{localReady ? "IA local ativa" : loadingModel ? "A carregar…" : "Ativar IA local"}</Button>
       </div>
     </div>
-    <div className="hunter-ai-intro"><Sparkles size={15}/> Carrega no microfone e fala. O Caçador envia a tua fala automaticamente e responde em voz alta.</div>
+    <div className="hunter-ai-intro"><Sparkles size={15}/> A IA funciona neste dispositivo, sem chave de API nem cobrança por mensagem. O primeiro carregamento descarrega cerca de 500 MB; mantém esta página aberta até terminar. {modelProgress.text} {loadingModel ? `(${modelProgress.percent}%)` : ""}</div>
     <div className="hunter-ai-messages" aria-live="polite">
       {messages.map((line, index) => <div className={"hunter-ai-message " + line.role} key={index}><span>{line.role === "assistant" ? "CAÇADOR" : "TU"}</span><p>{line.text}</p></div>)}
       {busy && <div className="hunter-ai-message assistant"><span>CAÇADOR</span><p className="ai-thinking">A analisar o teu pedido…</p></div>}
       <div ref={bottom}/>
     </div>
     {aiError && <p className="hunter-ai-error" role="alert">{aiError}</p>}
-    {connection.checkedAt && !checking && <p className="text-xs text-muted-foreground" role="status">{connection.message}</p>}
     {voiceError && <p className="hunter-ai-error">{voiceError}</p>}
     <form className="hunter-ai-compose" onSubmit={(event) => void send(event)}>
       <button type="button" className={listening ? "ai-mic-btn listening" : "ai-mic-btn"} onClick={toggleListening} aria-label={listening ? "Parar microfone" : "Falar com Caçador"} title={listening ? "Parar microfone" : "Falar com Caçador — envio automático"}>{listening ? <MicOff size={17}/> : <Mic size={17}/>}</button>
