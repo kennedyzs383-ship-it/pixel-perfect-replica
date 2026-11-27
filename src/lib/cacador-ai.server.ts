@@ -55,7 +55,7 @@ export async function generateCacadorAnswer(message: string, context = '', test 
         : '').trim();
     return { answer, connection: connectedResult(answer) };
   } catch (error) {
-    const timeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    const timeout = (error instanceof Error || error instanceof DOMException) && (error.name === 'TimeoutError' || error.name === 'AbortError');
     return { answer: '', connection: failedConnection(timeout ? 'timeout' : 'unavailable') };
   }
 }
