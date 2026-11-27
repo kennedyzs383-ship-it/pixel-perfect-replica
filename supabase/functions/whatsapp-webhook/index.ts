@@ -19,6 +19,17 @@ function metaTimestamp(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function messageTextFrom(item: Record<string, unknown>, type: string): string {
+  if (type === "text" && isRecord(item.text) && typeof item.text.body === "string") return item.text.body;
+  if (type === "interactive" && isRecord(item.interactive)) {
+    const interactive = item.interactive;
+    if (isRecord(interactive.button_reply) && typeof interactive.button_reply.title === "string") return interactive.button_reply.title;
+    if (isRecord(interactive.list_reply) && typeof interactive.list_reply.title === "string") return interactive.list_reply.title;
+  }
+  if (type === "button" && isRecord(item.button) && typeof item.button.text === "string") return item.button.text;
+  return "";
+}
+
 async function broadcastCallEvents(payload: Record<string, unknown>): Promise<number> {
   const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -116,9 +127,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
             from_phone: item.from,
             contact_name: contactNameFrom(contacts, item.from),
             message_type: type,
-            text_body: type === "text" && isRecord(item.text) && typeof item.text.body === "string"
-              ? item.text.body.slice(0, 4096)
-              : null,
+            text_body: messageTextFrom(item, type).slice(0, 4096) || null,
             media_id: mediaPayload && typeof mediaPayload.id === "string" ? mediaPayload.id : null,
             media_mime_type: mediaPayload && typeof mediaPayload.mime_type === "string" ? mediaPayload.mime_type : null,
             meta_timestamp: metaTimestamp(item.timestamp),
@@ -126,16 +135,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
             raw_message: item,
           }, { onConflict: "owner_id,message_id", ignoreDuplicates: true });
         if (persistError) throw new Error("Could not persist incoming WhatsApp message: " + persistError.message);
-        let messageText = "";
-        if (type === "text" && isRecord(item.text) && typeof item.text.body === "string") {
-          messageText = item.text.body;
-        } else if (type === "interactive" && isRecord(item.interactive)) {
-          const interactive = item.interactive;
-          if (isRecord(interactive.button_reply) && typeof interactive.button_reply.title === "string") messageText = interactive.button_reply.title;
-          else if (isRecord(interactive.list_reply) && typeof interactive.list_reply.title === "string") messageText = interactive.list_reply.title;
-        } else if (type === "button" && isRecord(item.button) && typeof item.button.text === "string") {
-          messageText = item.button.text;
-        }
+        const messageText = messageTextFrom(item, type);
         if (!messageText.trim()) continue;
         const contactName = contactNameFrom(contacts, item.from);
         const channel = supabase.channel(topic, { config: { private: true } });
