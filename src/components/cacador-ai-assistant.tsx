@@ -36,7 +36,7 @@ export function CacadorAIAssistant() {
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [aiError, setAiError] = useState("");
-  const recognition = useRef<SpeechRecognitionLike | null>(null);
+  const recognition = useRef<SpeechRecognitionLike | null>(null);\n  const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export function CacadorAIAssistant() {
     instance.interimResults = false;
     instance.onresult = (event) => {
       const transcript = Array.from(event.results).map((item) => item[0]?.transcript ?? "").join(" ").trim();
-      if (transcript) setInput((previous) => previous ? previous + " " + transcript : transcript);
+      if (transcript) sendVoicePrompt.current?.(transcript);
     };
     instance.onerror = () => {
       setVoiceError("Não foi possível captar a voz. Verifica a permissão do microfone.");
@@ -123,16 +123,16 @@ export function CacadorAIAssistant() {
     }
   };
 
-  return <section className="hunter-ai">
+  sendVoicePrompt.current = (prompt) => { void send(undefined, prompt); };\n\n  return <section className="hunter-ai">
     <div className="hunter-ai-head">
       <div className="hunter-ai-icon"><Bot size={20}/></div>
-      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{checking ? "A verificar…" : connection.connected ? "Ligado" : "Não ligado"} · Gemini via Lovable AI</span></div>
+      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{checking ? "A verificar…" : connection.connected ? "Ligado" : "Não ligado"} · Z Router · Gemini 2.5 Flash</span></div>
       <div className="hunter-ai-controls">
         <button type="button" className={speaking ? "ai-icon-btn active" : "ai-icon-btn"} onClick={() => { setSpeaking((value) => !value); if (speaking && "speechSynthesis" in window) window.speechSynthesis.cancel(); }} aria-label={speaking ? "Desativar voz" : "Ativar voz"} title={speaking ? "Desativar voz" : "Ativar voz"}>{speaking ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
         <Button variant="outline" size="icon" onClick={() => void check()} disabled={checking || busy} aria-label="Testar ligação" title="Testar ligação"><Sparkles size={15}/></Button>
       </div>
     </div>
-    <div className="hunter-ai-intro"><Sparkles size={15}/> Fala naturalmente. O Caçador responde por texto e, quando a voz está ativa, também fala contigo.</div>
+    <div className="hunter-ai-intro"><Sparkles size={15}/> Carrega no microfone e fala. O Caçador envia a tua fala automaticamente e responde em voz alta.</div>
     <div className="hunter-ai-messages" aria-live="polite">
       {messages.map((line, index) => <div className={"hunter-ai-message " + line.role} key={index}><span>{line.role === "assistant" ? "CAÇADOR" : "TU"}</span><p>{line.text}</p></div>)}
       {busy && <div className="hunter-ai-message assistant"><span>CAÇADOR</span><p className="ai-thinking">A analisar o teu pedido…</p></div>}
@@ -142,7 +142,7 @@ export function CacadorAIAssistant() {
     {connection.checkedAt && !checking && <p className="text-xs text-muted-foreground" role="status">{connection.message}</p>}
     {voiceError && <p className="hunter-ai-error">{voiceError}</p>}
     <form className="hunter-ai-compose" onSubmit={(event) => void send(event)}>
-      <button type="button" className={listening ? "ai-mic-btn listening" : "ai-mic-btn"} onClick={toggleListening} aria-label={listening ? "Parar microfone" : "Falar com Caçador"} title={listening ? "Parar microfone" : "Falar com Caçador"}>{listening ? <MicOff size={17}/> : <Mic size={17}/>}</button>
+      <button type="button" className={listening ? "ai-mic-btn listening" : "ai-mic-btn"} onClick={toggleListening} aria-label={listening ? "Parar microfone" : "Falar com Caçador"} title={listening ? "Parar microfone" : "Falar com Caçador — envio automático"}>{listening ? <MicOff size={17}/> : <Mic size={17}/>}</button>
       <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ex.: prepara um website para uma clínica em Luanda…" maxLength={4000} aria-label="Mensagem para o Caçador"/>
       <button className="ai-send-btn" type="submit" disabled={busy || !input.trim()} aria-label="Enviar mensagem"><Send size={16}/></button>
     </form>
