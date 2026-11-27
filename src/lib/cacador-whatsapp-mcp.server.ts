@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const CustomerSchema = z.string().trim().regex(/^\\+?[1-9]\\d{7,14}$/, 'Indica o número WhatsApp do cliente em formato internacional.');
+const CustomerSchema = z.string().trim().regex(/^\+?[1-9]\\d{7,14}$/, 'Indica o número WhatsApp do cliente em formato internacional.');
 const CallPermissionSchema = z.object({
   to: CustomerSchema,
   message: z.string().trim().min(1).max(1024).default('Gostaríamos de falar contigo por chamada WhatsApp sobre a nossa proposta. Autorizas que te liguemos?'),
@@ -123,7 +123,7 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
 
   if (toolName === 'get_call_settings') {
     const { phoneNumberId } = config();
-    if (!phoneNumberId || !/^\\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
+    if (!phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
     const result = await graphRequest(`${phoneNumberId}/call_settings`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
     return { isError: false, content: JSON.stringify(result).slice(0, 6000) };
   }
@@ -132,8 +132,8 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
     const parsed = CallPermissionStatusSchema.safeParse(args);
     if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || 'Número inválido.');
     const { phoneNumberId } = config();
-    if (!phoneNumberId || !/^\\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
-    const userWaId = parsed.data.to.replace(/^\\+/, '');
+    if (!phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
+    const userWaId = parsed.data.to.replace(/^\+/, '');
     const result = await graphRequest(`${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(userWaId)}`, { method: 'GET' });
     return { isError: false, content: JSON.stringify(result).slice(0, 6000) };
   }
@@ -142,8 +142,8 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
     const parsed = CallPermissionSchema.safeParse(args);
     if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || 'Argumentos inválidos.');
     const { phoneNumberId } = config();
-    if (!phoneNumberId || !/^\\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
-    const to = parsed.data.to.replace(/^\\+/, '');
+    if (!phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
+    const to = parsed.data.to.replace(/^\+/, '');
     const result = await graphRequest(`${phoneNumberId}/messages`, {
       method: 'POST',
       body: JSON.stringify({
@@ -165,9 +165,9 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
     const parsed = ManageCallSchema.safeParse(args);
     if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || 'Ação de chamada inválida.');
     const { phoneNumberId } = config();
-    if (!phoneNumberId || !/^\\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
+    if (!phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
     if (parsed.data.action === 'connect') {
-      const to = parsed.data.to!.replace(/^\\+/, '');
+      const to = parsed.data.to!.replace(/^\+/, '');
       const permission = await graphRequest(`${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(to)}`, { method: 'GET' }) as { permission?: { status?: string }; actions?: Array<{ action_name?: string; can_perform_action?: boolean }> };
       const canStart = permission.actions?.some(item => item.action_name === 'start_call' && item.can_perform_action);
       if (!canStart && !['granted', 'temporary', 'permanent'].includes(permission.permission?.status ?? '')) {
@@ -175,7 +175,7 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
       }
     }
     const payload: Record<string, unknown> = { messaging_product: 'whatsapp', action: parsed.data.action };
-    if (parsed.data.to) payload.to = parsed.data.to.replace(/^\\+/, '');
+    if (parsed.data.to) payload.to = parsed.data.to.replace(/^\+/, '');
     if (parsed.data.call_id) payload.call_id = parsed.data.call_id;
     if (parsed.data.sdp) payload.session = { sdp_type: parsed.data.action === 'connect' ? 'offer' : 'answer', sdp: parsed.data.sdp };
     if (parsed.data.biz_opaque_callback_data) payload.biz_opaque_callback_data = parsed.data.biz_opaque_callback_data;
