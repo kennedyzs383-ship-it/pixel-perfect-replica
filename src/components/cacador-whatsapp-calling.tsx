@@ -36,6 +36,8 @@ export function CacadorWhatsAppCalling() {
   // Keep the Realtime listener stable while exposing the latest call state.
   const activeCallIdRef = useRef("");
   const incomingRef = useRef<CallEvent | null>(null);
+  // Keep the call ID after local cleanup so a later Meta webhook can confirm termination.
+  const pendingTerminationCallIdRef = useRef("");
   const [muted, setMuted] = useState(false);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -231,9 +233,11 @@ export function CacadorWhatsAppCalling() {
 
       // Ignore late events from previous calls; stale termination must not
       // close the peer connection belonging to a newer call.
-      if ((event === "terminate" || event === "terminated") && (belongsToActive || belongsToIncoming)) {
+      const confirmsPendingTermination = Boolean(callId && callId === pendingTerminationCallIdRef.current);
+      if ((event === "terminate" || event === "terminated") && (belongsToActive || belongsToIncoming || confirmsPendingTermination)) {
+        pendingTerminationCallIdRef.current = "";
         cleanup();
-        setStatus("Chamada terminada.");
+        setStatus("A Meta confirmou o encerramento da chamada.");
         continue;
       }
 
@@ -254,14 +258,16 @@ export function CacadorWhatsAppCalling() {
     }
 
     const statuses = parseWhatsAppCallStatuses(payload.statuses);
-    const currentCallId = activeCallIdRef.current || incomingRef.current?.id || "";
+    const currentCallId = activeCallIdRef.current || incomingRef.current?.id || pendingTerminationCallIdRef.current;
     const terminalStatus = statuses.find((item) =>
       isTerminalWhatsAppCallStatus(item.status ?? item.event) &&
       statusBelongsToCall(item, currentCallId),
     );
     if (terminalStatus) {
+      const wasPendingTermination = Boolean(pendingTerminationCallIdRef.current && currentCallId === pendingTerminationCallIdRef.current);
+      pendingTerminationCallIdRef.current = "";
       cleanup();
-      setStatus("A chamada terminou ou foi recusada.");
+      setStatus(wasPendingTermination ? "A Meta confirmou o encerramento da chamada." : "A Meta confirmou que a chamada terminou ou foi recusada.");
     }
     // ACCEPTED is informational and may arrive after media is connected.
   }, [cleanup]);
@@ -374,15 +380,22 @@ export function CacadorWhatsAppCalling() {
     setBusy(true);
     let terminationError = "";
     try {
-      if (callId) await callControl({ action: "terminate", call_id: callId });
+      if (callId) {
+        // A successful HTTP response only acknowledges the request; the webhook/status
+        // event is the source of truth for the actual remote call termination.
+        await callControl({ action: "terminate", call_id: callId });
+      }
     } catch (error) {
-      terminationError = error instanceof Error ? error.message : "Não foi possível terminar a chamada na Meta.";
+      terminationError = error instanceof Error ? error.message : "Não foi possível confirmar o pedido de encerramento na Meta.";
     } finally {
-      // Always stop local media, but never hide a failed remote terminate request.
+      if (callId) pendingTerminationCallIdRef.current = callId;
+      // Always stop local media, but do not claim the remote call ended until Meta reports it.
       cleanup();
-      setStatus(terminationError
-        ? `Áudio local desligado, mas a Meta não confirmou o fim da chamada: ${terminationError}`
-        : "Chamada terminada.");
+      setStatus(!callId
+        ? "Áudio local desligado. Não havia um identificador de chamada para confirmar o encerramento remoto."
+        : terminationError
+          ? `Áudio local desligado, mas a Meta não confirmou o pedido de encerramento: ${terminationError}. À espera de confirmação de estado.`
+          : "Áudio local desligado. Pedido de encerramento enviado à Meta; à espera de confirmação do webhook.");
       setBusy(false);
     }
   };
