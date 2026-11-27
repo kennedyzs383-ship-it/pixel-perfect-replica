@@ -130,6 +130,33 @@ export function CacadorAIAssistant() {
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session?.access_token) await supabase.realtime.setAuth(sessionData.session.access_token);
       if (!active) return;
+
+      // Restore the most recent persisted inbox messages after reconnect.
+      // Historical messages are displayed as context only; they are never
+      // automatically re-submitted to the AI or sent back to customers.
+      const { data: inboxRows, error: inboxError } = await supabase
+        .from("whatsapp_inbox_messages")
+        .select("message_id,from_phone,contact_name,text_body,message_type,received_at")
+        .eq("owner_id", data.user.id)
+        .order("received_at", { ascending: true })
+        .limit(50);
+      if (inboxError) {
+        setAiError("Não foi possível recuperar o histórico WhatsApp: " + inboxError.message);
+      } else if (active && inboxRows?.length) {
+        const restored: ChatLine[] = [];
+        for (const row of inboxRows) {
+          seenWhatsAppMessageIds.current.add(row.message_id);
+          if (typeof row.text_body !== "string" || !row.text_body.trim()) continue;
+          const sender = row.contact_name?.trim() || "+" + row.from_phone;
+          restored.push({
+            role: "user",
+            sender: "WhatsApp · " + sender,
+            text: row.text_body.slice(0, 4096),
+          });
+        }
+        if (restored.length) setMessages(previous => [...previous, ...restored].slice(-100));
+      }
+      if (!active) return;
       channel = supabase.channel("whatsapp-calls:" + data.user.id, { config: { private: true } })
         .on("broadcast", { event: "incoming_message" }, ({ payload }) => {
           const item = payload as Partial<IncomingWhatsAppMessage>;
