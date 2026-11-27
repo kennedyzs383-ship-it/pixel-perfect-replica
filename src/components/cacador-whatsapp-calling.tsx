@@ -50,8 +50,13 @@ export function CacadorWhatsAppCalling() {
   const activeSpeechSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const vadFrameRef = useRef<number | null>(null);
   const remoteAnalyserRef = useRef<AnalyserNode | null>(null);
+  const iceDisconnectTimerRef = useRef<number | null>(null);
 
   const cleanup = useCallback(() => {
+    if (iceDisconnectTimerRef.current !== null) {
+      window.clearTimeout(iceDisconnectTimerRef.current);
+      iceDisconnectTimerRef.current = null;
+    }
     recordingActiveRef.current = false;
     if (recordingTimerRef.current !== null) window.clearTimeout(recordingTimerRef.current);
     recordingTimerRef.current = null;
@@ -224,11 +229,38 @@ export function CacadorWhatsAppCalling() {
         setStatus("Chamada ligada. O Caçador está a ouvir o cliente.");
       }
     };
+    peer.oniceconnectionstatechange = () => {
+      const iceState = peer.iceConnectionState;
+      if (iceState === "connected" || iceState === "completed") {
+        if (iceDisconnectTimerRef.current !== null) {
+          window.clearTimeout(iceDisconnectTimerRef.current);
+          iceDisconnectTimerRef.current = null;
+        }
+        setStatus("Ligação ICE estabelecida — áudio em tempo real.");
+      } else if (iceState === "disconnected") {
+        if (iceDisconnectTimerRef.current !== null) window.clearTimeout(iceDisconnectTimerRef.current);
+        setStatus("Ligação de rede interrompida. A aguardar recuperação automática…");
+        // ICE can briefly disconnect during mobile handovers. Do not tear down
+        // the call immediately; report a persistent outage after a short grace.
+        iceDisconnectTimerRef.current = window.setTimeout(() => {
+          iceDisconnectTimerRef.current = null;
+          if (peerRef.current === peer && peer.iceConnectionState === "disconnected") {
+            setStatus("A ligação continua interrompida. Verifica a rede; se não recuperar, termina e inicia novamente. Pode ser necessário configurar TURN.");
+          }
+        }, 8000);
+      } else if (iceState === "failed") {
+        if (iceDisconnectTimerRef.current !== null) {
+          window.clearTimeout(iceDisconnectTimerRef.current);
+          iceDisconnectTimerRef.current = null;
+        }
+        setStatus("A negociação ICE falhou. Esta integração ainda não faz renegociação automática; verifica TURN/rede e tenta uma nova chamada.");
+      }
+    };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === "connected") setStatus("Chamada ligada — áudio em tempo real.");
       else if (peer.connectionState === "connecting") setStatus("A estabelecer áudio…");
       else if (peer.connectionState === "failed") setStatus("A ligação de áudio falhou. A rede pode precisar de um servidor TURN.");
-      else if (peer.connectionState === "disconnected") setStatus("Ligação interrompida. A tentar recuperar…");
+      else if (peer.connectionState === "disconnected" && peer.iceConnectionState !== "disconnected") setStatus("Ligação interrompida. A aguardar recuperação…");
     };
     return peer;
   }, [processCustomerAudio]);
