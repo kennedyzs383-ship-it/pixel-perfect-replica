@@ -3,8 +3,6 @@ import { Phone, PhoneCall, PhoneOff, Mic, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
 import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-voice.functions";
-import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
-import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-voice.functions";
 
 type CallEvent = {
   id?: string;
