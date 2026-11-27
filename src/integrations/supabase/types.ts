@@ -14,7 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      whatsapp_inbox_messages: {
+        Row: {
+          id: string
+          owner_id: string
+          message_id: string
+          from_phone: string
+          contact_name: string | null
+          message_type: string
+          text_body: string | null
+          media_id: string | null
+          media_mime_type: string | null
+          meta_timestamp: string | null
+          phone_number_id: string
+          raw_message: Json
+          received_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          owner_id: string
+          message_id: string
+          from_phone: string
+          contact_name?: string | null
+          message_type: string
+          text_body?: string | null
+          media_id?: string | null
+          media_mime_type?: string | null
+          meta_timestamp?: string | null
+          phone_number_id: string
+          raw_message?: Json
+          received_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          owner_id?: string
+          message_id?: string
+          from_phone?: string
+          contact_name?: string | null
+          message_type?: string
+          text_body?: string | null
+          media_id?: string | null
+          media_mime_type?: string | null
+          meta_timestamp?: string | null
+          phone_number_id?: string
+          raw_message?: Json
+          received_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
