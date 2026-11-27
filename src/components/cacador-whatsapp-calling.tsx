@@ -45,7 +45,7 @@ export function CacadorWhatsAppCalling() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const speechDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const voiceBusyRef = useRef(false);
+  const voiceQueueRef = useRef<Promise<void>>(Promise.resolve());
   const recordingActiveRef = useRef(false);
   const recordingTimerRef = useRef<number | null>(null);
 
@@ -60,7 +60,7 @@ export function CacadorWhatsAppCalling() {
     void audioContextRef.current?.close();
     audioContextRef.current = null;
     speechDestinationRef.current = null;
-    voiceBusyRef.current = false;
+    voiceQueueRef.current = Promise.resolve();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (audioRef.current) audioRef.current.srcObject = null;
@@ -92,23 +92,29 @@ export function CacadorWhatsAppCalling() {
     source.start();
   }, []);
 
-  const processCustomerAudio = useCallback(async (blob: Blob) => {
-    if (voiceBusyRef.current || blob.size < 1200 || !peerRef.current) return;
-    voiceBusyRef.current = true;
-    try {
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      let binary = "";
-      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-      const transcription = await transcribeCacadorVoice({ data: { audioBase64: btoa(binary), mimeType: blob.type || "audio/webm" } });
-      if (!transcription.text.trim()) return;
-      setStatus("Cliente: " + transcription.text.slice(0, 150) + " — a preparar resposta…");
-      const answer = await askCacadorWithMcpFn({ data: { message: transcription.text, context: "Estás numa chamada WhatsApp em direto. Responde em português de Angola, de forma breve, natural e própria para ser dita em voz alta. Não afirmes que executaste ações externas sem autorização. Se o cliente pedir uma pessoa, informa que a chamada será encaminhada." } });
-      if (!answer.answer?.trim()) throw new Error("O Z Router não devolveu uma resposta para a chamada.");
-      await speakToCustomer(answer.answer);
-      setStatus("Caçador respondeu por voz. À escuta do cliente…");
-    } catch (error) {
-      setStatus(error instanceof Error ? "Voz inteligente: " + error.message : "Não foi possível processar a voz do cliente.");
-    } finally { voiceBusyRef.current = false; }
+  const processCustomerAudio = useCallback((blob: Blob) => {
+    if (blob.size < 1200) return;
+    // Keep capture independent from AI latency, while processing utterances in order.
+    voiceQueueRef.current = voiceQueueRef.current.then(async () => {
+      if (!peerRef.current) return;
+      try {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        const transcription = await transcribeCacadorVoice({ data: { audioBase64: btoa(binary), mimeType: blob.type || "audio/webm" } });
+        if (!transcription.text.trim() || !peerRef.current) return;
+        setStatus("Cliente: " + transcription.text.slice(0, 150) + " — a preparar resposta…");
+        const answer = await askCacadorWithMcpFn({ data: { message: transcription.text, context: "Estás numa chamada WhatsApp em direto. Responde em português de Angola, de forma breve, natural e própria para ser dita em voz alta. Não afirmes que executaste ações externas sem autorização. Se o cliente pedir uma pessoa, informa que a chamada será encaminhada." } });
+        if (!answer.answer?.trim()) throw new Error("O Z Router não devolveu uma resposta para a chamada.");
+        if (!peerRef.current) return;
+        await speakToCustomer(answer.answer);
+        setStatus("Caçador respondeu por voz. À escuta do cliente…");
+      } catch (error) {
+        setStatus(error instanceof Error ? "Voz inteligente: " + error.message : "Não foi possível processar a voz do cliente.");
+      }
+    }).catch((error) => {
+      setStatus(error instanceof Error ? error.message : "Falha na fila de processamento de voz.");
+    });
   }, [speakToCustomer]);
 
   const createPeer = useCallback(async () => {
@@ -141,17 +147,13 @@ export function CacadorWhatsAppCalling() {
           recorder.ondataavailable = (recordingEvent) => {
             if (recordingEvent.data.size > 0) chunks.push(recordingEvent.data);
           };
-          recorder.onstop = async () => {
+          recorder.onstop = () => {
             if (recorderRef.current === recorder) recorderRef.current = null;
             if (!recordingActiveRef.current || peerRef.current !== peer) return;
             const segment = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-            try {
-              await processCustomerAudio(segment);
-            } finally {
-              if (recordingActiveRef.current && peerRef.current === peer) {
-                recordingTimerRef.current = window.setTimeout(recordCompleteSegment, 0);
-              }
-            }
+            // Start the next complete recording immediately; STT/LLM/TTS runs separately.
+            recordingTimerRef.current = window.setTimeout(recordCompleteSegment, 0);
+            processCustomerAudio(segment);
           };
           recorder.start();
           recordingTimerRef.current = window.setTimeout(() => {
