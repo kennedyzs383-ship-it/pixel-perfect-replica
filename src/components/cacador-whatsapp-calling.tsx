@@ -46,9 +46,14 @@ export function CacadorWhatsAppCalling() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const speechDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const voiceBusyRef = useRef(false);
+  const recordingActiveRef = useRef(false);
+  const recordingTimerRef = useRef<number | null>(null);
 
   const cleanup = useCallback(() => {
-    recorderRef.current?.stop();
+    recordingActiveRef.current = false;
+    if (recordingTimerRef.current !== null) window.clearTimeout(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+    if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
     recorderRef.current = null;
     peerRef.current?.close();
     peerRef.current = null;
@@ -123,12 +128,37 @@ export function CacadorWhatsAppCalling() {
         audioRef.current.srcObject = remoteStream;
         void audioRef.current.play().catch(() => setStatus("Permite a reprodução de áudio no navegador."));
       }
-      if (typeof MediaRecorder !== "undefined" && !recorderRef.current) {
+      if (typeof MediaRecorder !== "undefined" && !recordingActiveRef.current) {
         const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
-        const recorder = new MediaRecorder(remoteStream, mimeType ? { mimeType } : undefined);
-        recorderRef.current = recorder;
-        recorder.ondataavailable = (recordingEvent) => { void processCustomerAudio(recordingEvent.data); };
-        recorder.start(4000);
+        recordingActiveRef.current = true;
+        // Each transcription receives a complete WebM file. MediaRecorder timeslice
+        // chunks after the first are not standalone files and must not be sent alone.
+        const recordCompleteSegment = () => {
+          if (!recordingActiveRef.current || peerRef.current !== peer) return;
+          const recorder = new MediaRecorder(remoteStream, mimeType ? { mimeType } : undefined);
+          const chunks: BlobPart[] = [];
+          recorderRef.current = recorder;
+          recorder.ondataavailable = (recordingEvent) => {
+            if (recordingEvent.data.size > 0) chunks.push(recordingEvent.data);
+          };
+          recorder.onstop = async () => {
+            if (recorderRef.current === recorder) recorderRef.current = null;
+            if (!recordingActiveRef.current || peerRef.current !== peer) return;
+            const segment = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+            try {
+              await processCustomerAudio(segment);
+            } finally {
+              if (recordingActiveRef.current && peerRef.current === peer) {
+                recordingTimerRef.current = window.setTimeout(recordCompleteSegment, 0);
+              }
+            }
+          };
+          recorder.start();
+          recordingTimerRef.current = window.setTimeout(() => {
+            if (recorder.state !== "inactive") recorder.stop();
+          }, 4000);
+        };
+        recordCompleteSegment();
         setStatus("Chamada ligada. O Caçador está a ouvir o cliente.");
       }
     };
