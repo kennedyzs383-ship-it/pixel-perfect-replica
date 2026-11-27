@@ -40,6 +40,9 @@ export function CacadorWhatsAppCalling() {
   const [realtimeReady, setRealtimeReady] = useState(false);
   const [activeCallId, setActiveCallId] = useState("");
   const [incoming, setIncoming] = useState<CallEvent | null>(null);
+  // Keep the Realtime listener stable while exposing the latest call state.
+  const activeCallIdRef = useRef("");
+  const incomingRef = useRef<CallEvent | null>(null);
   const [muted, setMuted] = useState(false);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -75,6 +78,8 @@ export function CacadorWhatsAppCalling() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (audioRef.current) audioRef.current.srcObject = null;
+    activeCallIdRef.current = "";
+    incomingRef.current = null;
     setActiveCallId("");
     setIncoming(null);
     setMuted(false);
@@ -226,8 +231,10 @@ export function CacadorWhatsAppCalling() {
     for (const call of calls) {
       const event = String(call.event ?? "").toLowerCase();
       const callId = getWhatsAppCallId(call);
-      const belongsToActive = Boolean(callId && callId === activeCallId);
-      const belongsToIncoming = Boolean(callId && callId === incoming?.id);
+      const currentActiveCallId = activeCallIdRef.current;
+      const currentIncoming = incomingRef.current;
+      const belongsToActive = Boolean(callId && callId === currentActiveCallId);
+      const belongsToIncoming = Boolean(callId && callId === currentIncoming?.id);
 
       // Ignore late events from previous calls; stale termination must not
       // close the peer connection belonging to a newer call.
@@ -238,19 +245,23 @@ export function CacadorWhatsAppCalling() {
       }
 
       if (call.session?.sdp && call.session.sdp_type === "answer" && peerRef.current) {
-        if (callId && activeCallId && callId !== activeCallId) continue;
+        if (callId && currentActiveCallId && callId !== currentActiveCallId) continue;
         await peerRef.current.setRemoteDescription({ type: "answer", sdp: call.session.sdp });
-        if (callId) setActiveCallId(callId);
+        if (callId) {
+          activeCallIdRef.current = callId;
+          setActiveCallId(callId);
+        }
         setStatus("Resposta recebida. A ligar o áudio…");
       } else if (call.session?.sdp && call.session.sdp_type === "offer" && callId) {
-        if (activeCallId || (incoming?.id && incoming.id !== callId)) continue;
+        if (currentActiveCallId || (currentIncoming?.id && currentIncoming.id !== callId)) continue;
+        incomingRef.current = call;
         setIncoming(call);
         setStatus("Chamada WhatsApp recebida. Podes atender ou rejeitar.");
       }
     }
 
     const statuses = Array.isArray(payload.statuses) ? payload.statuses as Array<Record<string, unknown>> : [];
-    const currentCallId = activeCallId || incoming?.id || "";
+    const currentCallId = activeCallIdRef.current || incomingRef.current?.id || "";
     const terminalStatus = statuses.find((item) =>
       isTerminalWhatsAppCallStatus(item.status ?? item.event) &&
       statusBelongsToCall(item, currentCallId),
@@ -260,7 +271,7 @@ export function CacadorWhatsAppCalling() {
       setStatus("A chamada terminou ou foi recusada.");
     }
     // ACCEPTED is informational and may arrive after media is connected.
-  }, [activeCallId, incoming, cleanup]);
+  }, [cleanup]);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -318,7 +329,10 @@ export function CacadorWhatsAppCalling() {
       await waitForIceGathering(peer);
       const result = await callControl({ action: "connect", to: phone.trim(), sdp: peer.localDescription?.sdp });
       const calls = Array.isArray(result.calls) ? result.calls as Array<{ id?: string }> : [];
-      if (calls[0]?.id) setActiveCallId(calls[0].id);
+      if (calls[0]?.id) {
+        activeCallIdRef.current = calls[0].id;
+        setActiveCallId(calls[0].id);
+      }
       setStatus("Pedido de chamada enviado à Meta. À espera da resposta do cliente…");
     } catch (error) {
       cleanup();
@@ -339,6 +353,8 @@ export function CacadorWhatsAppCalling() {
       if (!sdp) throw new Error("Não foi possível gerar a resposta WebRTC.");
       await callControl({ action: "pre_accept", call_id: incoming.id, sdp });
       await callControl({ action: "accept", call_id: incoming.id, sdp });
+      activeCallIdRef.current = incoming.id;
+      incomingRef.current = null;
       setActiveCallId(incoming.id);
       setIncoming(null);
       setStatus("Chamada aceite. A estabelecer áudio…");
@@ -353,6 +369,7 @@ export function CacadorWhatsAppCalling() {
     setBusy(true);
     try {
       await callControl({ action: "reject", call_id: incoming.id });
+      incomingRef.current = null;
       setIncoming(null);
       setStatus("Chamada rejeitada.");
     } catch (error) { setStatus(error instanceof Error ? error.message : "Não foi possível rejeitar a chamada."); }
@@ -360,7 +377,7 @@ export function CacadorWhatsAppCalling() {
   };
 
   const hangUp = async () => {
-    const callId = activeCallId;
+    const callId = activeCallIdRef.current || activeCallId;
     setBusy(true);
     try {
       if (callId) await callControl({ action: "terminate", call_id: callId });
