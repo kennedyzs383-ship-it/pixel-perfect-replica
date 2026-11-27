@@ -3,6 +3,8 @@ import { Phone, PhoneCall, PhoneOff, Mic, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
 import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-voice.functions";
+import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
+import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-voice.functions";
 
 type CallEvent = {
   id?: string;
@@ -48,8 +50,14 @@ export function CacadorWhatsAppCalling() {
   const voiceBusyRef = useRef(false);
 
   const cleanup = useCallback(() => {
+    recorderRef.current?.stop();
+    recorderRef.current = null;
     peerRef.current?.close();
     peerRef.current = null;
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+    speechDestinationRef.current = null;
+    voiceBusyRef.current = false;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (audioRef.current) audioRef.current.srcObject = null;
@@ -65,16 +73,65 @@ export function CacadorWhatsAppCalling() {
     return data.result as Record<string, unknown>;
   }, []);
 
+  const speakToCustomer = useCallback(async (text: string) => {
+    const result = await synthesizeCacadorVoice({ data: { text } });
+    const binary = atob(result.audioBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const context = audioContextRef.current;
+    const destination = speechDestinationRef.current;
+    if (!context || !destination) throw new Error("O canal de áudio da chamada ainda não está pronto.");
+    await context.resume();
+    const buffer = await context.decodeAudioData(bytes.buffer);
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(destination);
+    source.start();
+  }, []);
+
+  const processCustomerAudio = useCallback(async (blob: Blob) => {
+    if (voiceBusyRef.current || blob.size < 1200 || !peerRef.current) return;
+    voiceBusyRef.current = true;
+    try {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      const transcription = await transcribeCacadorVoice({ data: { audioBase64: btoa(binary), mimeType: blob.type || "audio/webm" } });
+      if (!transcription.text.trim()) return;
+      setStatus("Cliente: " + transcription.text.slice(0, 150) + " — a preparar resposta…");
+      const answer = await askCacadorWithMcpFn({ data: { message: transcription.text, context: "Estás numa chamada WhatsApp em direto. Responde em português de Angola, de forma breve, natural e própria para ser dita em voz alta. Não afirmes que executaste ações externas sem autorização. Se o cliente pedir uma pessoa, informa que a chamada será encaminhada." } });
+      if (!answer.answer?.trim()) throw new Error("O Z Router não devolveu uma resposta para a chamada.");
+      await speakToCustomer(answer.answer);
+      setStatus("Caçador respondeu por voz. À escuta do cliente…");
+    } catch (error) {
+      setStatus(error instanceof Error ? "Voz inteligente: " + error.message : "Não foi possível processar a voz do cliente.");
+    } finally { voiceBusyRef.current = false; }
+  }, [speakToCustomer]);
+
   const createPeer = useCallback(async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     streamRef.current = stream;
     const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
     peerRef.current = peer;
     stream.getAudioTracks().forEach((track) => peer.addTrack(track, stream));
+    const audioContext = new AudioContext();
+    audioContextRef.current = audioContext;
+    const speechDestination = audioContext.createMediaStreamDestination();
+    speechDestinationRef.current = speechDestination;
+    speechDestination.stream.getAudioTracks().forEach((track) => peer.addTrack(track, speechDestination.stream));
     peer.ontrack = (event) => {
+      const remoteStream = event.streams[0];
       if (audioRef.current) {
-        audioRef.current.srcObject = event.streams[0];
+        audioRef.current.srcObject = remoteStream;
         void audioRef.current.play().catch(() => setStatus("Permite a reprodução de áudio no navegador."));
+      }
+      if (typeof MediaRecorder !== "undefined" && !recorderRef.current) {
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+        const recorder = new MediaRecorder(remoteStream, mimeType ? { mimeType } : undefined);
+        recorderRef.current = recorder;
+        recorder.ondataavailable = (recordingEvent) => { void processCustomerAudio(recordingEvent.data); };
+        recorder.start(4000);
+        setStatus("Chamada ligada. O Caçador está a ouvir o cliente.");
       }
     };
     peer.onconnectionstatechange = () => {
@@ -84,7 +141,7 @@ export function CacadorWhatsAppCalling() {
       else if (peer.connectionState === "disconnected") setStatus("Ligação interrompida. A tentar recuperar…");
     };
     return peer;
-  }, []);
+  }, [processCustomerAudio]);
 
   const receiveSignal = useCallback(async (payload: Record<string, unknown>) => {
     const calls = Array.isArray(payload.calls) ? payload.calls as CallEvent[] : [];
