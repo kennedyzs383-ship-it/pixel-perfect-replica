@@ -29,3 +29,8 @@ A disponibilidade real depende de o fornecedor aceitar os modelos e formatos con
 ## Captura de áudio na chamada
 
 A captura fecha cada gravação após aproximadamente 4 segundos e envia o ficheiro completo, não fragmentos isolados do `MediaRecorder`. O gravador reinicia sem esperar pela transcrição, pelo Z Router ou pela síntese, e os segmentos são processados numa fila ordenada. A reprodução TTS também ocupa essa fila até terminar, evitando sobreposição de respostas. Os formatos MIME suportados são validados e recebem a extensão correspondente. Continua a ser um protótipo por segmentos: pode dividir frases a meio, processar silêncio e não permite interrupção imediata da fala sintetizada (barge-in). Antes de produção, implementar deteção de voz/silêncio com buffer contínuo, barge-in, limites de duração e testes reais em Android/iOS e redes móveis.
+
+
+## Interrupção da resposta (barge-in)
+
+Durante a chamada, o browser analisa a energia do áudio remoto com um `AnalyserNode`. Quando deteta três frames consecutivos acima do limiar RMS configurado, interrompe as fontes TTS ativas e liberta a fila para processar a fala do cliente. Esta é uma deteção simples por energia, não um VAD semântico: ruído, eco ou música podem causar interrupções falsas e voz baixa pode não atingir o limiar. O limiar deve ser calibrado em chamadas reais e com diferentes microfones/ambientes. A deteção corre apenas enquanto a ligação WebRTC está ativa e é cancelada no encerramento da chamada.
