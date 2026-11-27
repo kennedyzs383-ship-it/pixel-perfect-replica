@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./cacador-mcp.server', () => ({
-  listCacadorMcpTools: vi.fn(async () => [{ id: 'docs', name: 'Documentos', connected: true, tools: [{ name: 'search_docs', description: 'Pesquisa documentos', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }] }]),
+  listCacadorMcpTools: vi.fn(async () => [{ id: 'docs', name: 'Documentos', connected: true, tools: [{ name: 'search_docs', description: 'Pesquisa documentos', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }] }, { id: 'whatsapp-meta', name: 'WhatsApp Cloud API · MCP integrado', connected: true, tools: [{ name: 'send_text_message', description: 'Envia mensagem WhatsApp individual com aprovação humana.', inputSchema: { type: 'object', properties: { to: { type: 'string' }, message: { type: 'string' } }, required: ['to', 'message'] } }] }]),
 }));
 
 import { listCacadorMcpTools } from './cacador-mcp.server';
@@ -33,6 +33,16 @@ describe('Caçador MCP AI proposals', () => {
     ] } }] }));
     const result = await askCacadorWithMcp('Faz algo.');
     expect(result.proposals).toEqual([]);
+  });
+
+
+  it('exposes the native WhatsApp MCP tool to Z Router with its server identity', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: 'Posso preparar a mensagem.', tool_calls: [{ id: 'call-wa-1', type: 'function', function: { name: 'cacador_tool_1', arguments: '{\"to\":\"+244923000000\",\"message\":\"Olá!\"}' } }] } }] }));
+    const result = await askCacadorWithMcp('Envia uma mensagem WhatsApp ao cliente.');
+    expect(result.proposals).toMatchObject([{ serverId: 'whatsapp-meta', serverName: 'WhatsApp Cloud API · MCP integrado', toolName: 'send_text_message', arguments: { to: '+244923000000', message: 'Olá!' } }]);
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(request.tools).toHaveLength(2);
+    expect(request.tools[1].function.description).toContain('WhatsApp Cloud API');
   });
 
   it('requires the Z Router secret', async () => {
