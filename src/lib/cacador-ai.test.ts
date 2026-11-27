@@ -26,7 +26,7 @@ describe('Z Router connection outcomes', () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
     expect(mocks.fetch.mock.calls[0]?.[0]).toBe('https://www.zrouter.com/v1/chat/completions');
     const request = JSON.parse(mocks.fetch.mock.calls[0]?.[1]?.body as string);
-    expect(request.model).toBe('openrouter/google/gemini-2.5-flash');
+    expect(request.model).toBe('openrouter/baidu/ernie-5.5-flash-preview:free');
     expect(request.max_tokens).toBe(80);
     expect(mocks.fetch.mock.calls[0]?.[1]?.headers.Authorization).toBe('Bearer test-secret');
   });
@@ -40,7 +40,7 @@ describe('Z Router connection outcomes', () => {
     mocks.fetch.mockResolvedValue(Response.json({ choices: [{ message: { content: 'Olá' } }] }));
     await generateCacadorAnswer('Olá', 'Utilizador: Bom dia');
     const request = JSON.parse(mocks.fetch.mock.calls[0]?.[1]?.body as string);
-    expect(request).toMatchObject({ model: 'openrouter/google/gemini-2.5-flash', max_tokens: 1200 });
+    expect(request).toMatchObject({ model: 'openrouter/baidu/ernie-5.5-flash-preview:free', max_tokens: 1200 });
     expect(request.messages[1].content).toContain('Utilizador: Bom dia');
   });
   it('never treats empty or whitespace output as connected', async () => {
