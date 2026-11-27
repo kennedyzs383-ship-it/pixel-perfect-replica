@@ -37,7 +37,7 @@ describe('Caçador MCP AI proposals', () => {
 
 
   it('exposes the native WhatsApp MCP tool to Z Router with its server identity', async () => {
-    fetchMock.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: 'Posso preparar a mensagem.', tool_calls: [{ id: 'call-wa-1', type: 'function', function: { name: 'cacador_tool_1', arguments: '{\"to\":\"+244923000000\",\"message\":\"Olá!\"}' } }] } }] }));
+    fetchMock.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: 'Posso preparar a mensagem.', tool_calls: [{ id: 'call-wa-1', type: 'function', function: { name: 'cacador_tool_1', arguments: '{"to":"+244923000000","message":"Olá!"}' } }] } }] }));
     const result = await askCacadorWithMcp('Envia uma mensagem WhatsApp ao cliente.');
     expect(result.proposals).toMatchObject([{ serverId: 'whatsapp-meta', serverName: 'WhatsApp Cloud API · MCP integrado', toolName: 'send_text_message', arguments: { to: '+244923000000', message: 'Olá!' } }]);
     const request = JSON.parse(fetchMock.mock.calls[0][1].body);
