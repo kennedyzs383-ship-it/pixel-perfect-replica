@@ -3,19 +3,21 @@ import { Bot, CheckCircle2, CircleOff, KeyRound, LoaderCircle, PlugZap, ShieldCh
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useCacadorConnection } from '@/hooks/use-cacador-connection';
+import { UniversalAIHub } from '@/components/universal-ai-hub';
 
 export function GeminiSettings() {
   const [open, setOpen] = useState(false);
   return <section className="space-y-6 py-5 text-foreground" aria-label="Definições gerais">
     <div><h2 className="text-lg font-semibold">Definições gerais</h2><h3 className="mt-5 text-sm font-semibold">Chaves API</h3></div>
     <div className="flex flex-wrap items-center justify-between gap-4 border-y border-border py-5">
-      <div className="flex items-center gap-3"><Bot className="size-6 text-primary"/><div><strong className="text-sm">Z Router</strong><p className="mt-1 text-xs text-muted-foreground">Caçador · ERNIE 5.5 Flash Preview (gratuito)</p></div></div>
+      <div className="flex items-center gap-3"><Bot className="size-6 text-primary"/><div><strong className="text-sm">Z Router</strong><p className="mt-1 text-xs text-muted-foreground">Caçador · ERNIE 5.5 Flash Preview</p></div></div>
       <Button variant="outline" onClick={() => setOpen(true)}><KeyRound/> Configurar Z Router</Button>
     </div>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto rounded-lg text-foreground">
-      <DialogHeader><DialogTitle>Z Router</DialogTitle><DialogDescription>Ligação do cérebro do Caçador ao modelo ERNIE 5.5 Flash Preview (gratuito) através do Z Router.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>Z Router</DialogTitle><DialogDescription>Ligação do cérebro do Caçador ao modelo ERNIE 5.5 Flash Preview através do Z Router.</DialogDescription></DialogHeader>
       {open && <GeminiConnectionPanel/>}
     </DialogContent></Dialog>
+    <UniversalAIHub />
   </section>;
 }
 
