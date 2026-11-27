@@ -154,8 +154,8 @@ export function CacadorAIAssistant() {
   return <section className="hunter-ai">
     <div className="hunter-ai-head">
       <div className="hunter-ai-icon"><Bot size={20}/></div>
-      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{localReady ? "IA local pronta neste dispositivo" : loadingModel ? "A preparar IA local…" : "IA local desligada"} · Wllama · sem API Key</span></div>
-      <div className="hunter-ai-controls">
+      <div className="hunter-ai-heading"><b>Cérebro do Caçador</b><span>{provider === "local" ? (localReady ? "Qwen local pronto neste dispositivo" : loadingModel ? "A preparar IA local…" : "Qwen local desligado") : provider === "ollama" ? "Ollama selecionado" : "Z Router selecionado"}</span></div>
+      <div className="hunter-ai-controls">\n        <select aria-label="Escolher inteligência artificial" value={provider} onChange={(event) => setProvider(event.target.value as CacadorProvider)} className="ai-provider-select"><option value="local">Qwen local</option><option value="ollama">Ollama</option><option value="zrouter">Z Router</option></select>
         <button type="button" className={speaking ? "ai-icon-btn active" : "ai-icon-btn"} onClick={() => { setSpeaking((value) => !value); if (speaking && "speechSynthesis" in window) window.speechSynthesis.cancel(); }} aria-label={speaking ? "Desativar voz" : "Ativar voz"} title={speaking ? "Desativar voz" : "Ativar voz"}>{speaking ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
         <Button variant="outline" size="sm" onClick={() => { setLoadingModel(true); setAiError(""); void loadCacadorLocalAI(setModelProgress).then(() => { setLocalReady(true); setAiError(""); }).catch((error) => setAiError(error instanceof Error ? error.message : "Não foi possível carregar o modelo neste dispositivo.")).finally(() => setLoadingModel(false)); }} disabled={loadingModel || localReady || busy || provider !== "local"}><Sparkles size={14}/>{localReady ? "IA local ativa" : loadingModel ? "A carregar…" : "Ativar IA local"}</Button>
       </div>
