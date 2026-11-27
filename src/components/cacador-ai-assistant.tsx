@@ -5,9 +5,11 @@ import { askCacadorAI } from "@/lib/cacador-ai.functions";
 import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
 import { executeCacadorMcpTool } from "@/lib/cacador-mcp.functions";
 import { askOllama, type CacadorProvider } from "@/lib/cacador-ai-providers";
+import { supabase } from "@/integrations/supabase/client";
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandSparkles, Wrench, ShieldCheck } from "lucide-react";
 
-type ChatLine = { role: "user" | "assistant"; text: string };
+type ChatLine = { role: "user" | "assistant"; text: string; sender?: string };
+type IncomingWhatsAppMessage = { message_id: string; from: string; text: string; contact_name?: string | null; phone_number_id?: string };
 type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown> };
 const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
 function readStoredMessages(): ChatLine[] {
@@ -58,6 +60,7 @@ export function CacadorAIAssistant() {
   const recognition = useRef<SpeechRecognitionLike | null>(null);
   const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
+  const seenWhatsAppMessageIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -66,6 +69,95 @@ export function CacadorAIAssistant() {
   useEffect(() => {
     try { window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-100))); } catch { /* Storage may be unavailable or full. */ }
   }, [messages]);
+
+
+  useEffect(() => {
+    let active = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    const queue: IncomingWhatsAppMessage[] = [];
+    let processing = false;
+
+    const drainQueue = async () => {
+      if (processing || !active) return;
+      processing = true;
+      while (queue.length && active) {
+        const incoming = queue.shift()!;
+        const sender = incoming.contact_name?.trim() || "+" + incoming.from;
+        const customerLine: ChatLine = {
+          role: "user",
+          sender: "WhatsApp · " + sender,
+          text: incoming.text,
+        };
+        setMessages(previous => [...previous, customerLine]);
+        setBusy(true);
+        setAiError("");
+        try {
+          const context = messages.slice(-8).map(line =>
+            (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
+          ).join("\\n");
+          const result = await askCacadorWithMcpFn({
+            data: {
+              message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + incoming.from +
+                ". Nome: " + sender + ". Mensagem: " + incoming.text +
+                ". Responde em português natural de Angola. Se for apropriado, prepara uma resposta WhatsApp usando a ferramenta send_text_message, mas nunca a envies sem aprovação humana.",
+              context,
+            },
+          });
+          if (!active) break;
+          if (result.proposals.length) {
+            setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[])]);
+          }
+          if (result.answer?.trim()) {
+            setMessages(previous => [...previous, { role: "assistant", text: result.answer }]);
+            speak(result.answer);
+          } else if (!result.proposals.length) {
+            setAiError("O Z Router recebeu a mensagem WhatsApp, mas não preparou uma resposta.");
+          }
+        } catch (error) {
+          if (active) setAiError(error instanceof Error ? error.message : "Não foi possível encaminhar a mensagem WhatsApp ao Z Router.");
+        } finally {
+          if (active) setBusy(false);
+        }
+      }
+      processing = false;
+    };
+
+    void supabase.auth.getUser().then(async ({ data, error }) => {
+      if (!active || error || !data.user) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.access_token) await supabase.realtime.setAuth(sessionData.session.access_token);
+      if (!active) return;
+      channel = supabase.channel("whatsapp-calls:" + data.user.id, { config: { private: true } })
+        .on("broadcast", { event: "incoming_message" }, ({ payload }) => {
+          const item = payload as Partial<IncomingWhatsAppMessage>;
+          if (typeof item.message_id !== "string" || typeof item.from !== "string" ||
+            typeof item.text !== "string" || !item.text.trim()) return;
+          if (seenWhatsAppMessageIds.current.has(item.message_id)) return;
+          seenWhatsAppMessageIds.current.add(item.message_id);
+          if (seenWhatsAppMessageIds.current.size > 200) {
+            const oldest = seenWhatsAppMessageIds.current.values().next().value;
+            if (oldest) seenWhatsAppMessageIds.current.delete(oldest);
+          }
+          queue.push({
+            message_id: item.message_id,
+            from: item.from,
+            text: item.text.slice(0, 4096),
+            contact_name: typeof item.contact_name === "string" ? item.contact_name : null,
+            phone_number_id: typeof item.phone_number_id === "string" ? item.phone_number_id : undefined,
+          });
+          void drainQueue();
+        })
+        .subscribe();
+    }).catch(() => {
+      if (active) setAiError("Não foi possível ligar o Caçador ao canal privado de mensagens WhatsApp.");
+    });
+
+    return () => {
+      active = false;
+      queue.length = 0;
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, []);
 
   useEffect(() => () => {
     recognition.current?.stop();
@@ -194,7 +286,7 @@ export function CacadorAIAssistant() {
     </div>
     <div className="hunter-ai-intro"><Sparkles size={15}/> {provider === "local" ? <>A IA funciona neste dispositivo, sem chave de API nem cobrança por mensagem. O primeiro carregamento descarrega cerca de 500 MB; mantém esta página aberta até terminar. {modelProgress.text} {loadingModel ? `(${modelProgress.percent}%)` : ""}</> : provider === "ollama" ? <>A usar Ollama no endereço configurado em Definições. O computador/servidor executa o modelo e não há cobrança por mensagem do Caçador.</> : <>A usar Z Router no servidor. Esta opção depende da secret e dos limites/créditos do fornecedor.</>}</div>
     <div className="hunter-ai-messages" aria-live="polite">
-      {messages.map((line, index) => <div className={"hunter-ai-message " + line.role} key={index}><span>{line.role === "assistant" ? "CAÇADOR" : "TU"}</span><p>{line.text}</p></div>)}
+      {messages.map((line, index) => <div className={"hunter-ai-message " + line.role} key={index}><span>{line.sender || (line.role === "assistant" ? "CAÇADOR" : "TU")}</span><p>{line.text}</p></div>)}
       {busy && <div className="hunter-ai-message assistant"><span>CAÇADOR</span><p className="ai-thinking">A analisar o teu pedido…</p></div>}
       <div ref={bottom}/>
     </div>
