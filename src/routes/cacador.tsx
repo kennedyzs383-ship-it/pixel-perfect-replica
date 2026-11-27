@@ -302,7 +302,7 @@ function CacadorPage() {
   };
   return <div className="hunter">
     <style>{css}</style>
-    <header className="hunter-top"><a href="/" className="back"><ArrowLeft size={17}/> Painel Nuvem</a><div className="hunter-brand"><span>CA</span><div><b>Caçador</b><small>Inteligência comercial · Nuvem</small></div></div><div className="top-status"><i/> Área de trabalho</div></header>
+    <header className="hunter-top"><a href="/" className="back"><ArrowLeft size={17}/> Painel Nuvem</a><div className="hunter-brand"><span>CA</span><div><b>Caçador</b><small>Inteligência comercial · Nuvem</small></div></div><a href="/cacador/whatsapp" className="top-status" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 7 }}><MessageCircle size={15}/> WhatsApp</a></header>
     <main className="hunter-main">
       <div className="hero"><div><div className="eyebrow"><Sparkles size={14}/> CENTRO DE PROSPEÇÃO</div><h1>Encontra oportunidades.<br/><em>Constrói relações.</em></h1><p>Organiza empresas, investiga a presença digital e acompanha cada oportunidade comercial num só lugar.</p></div><div className="hero-icon"><Target size={52}/><span>CAÇADOR</span></div></div>
       <section className="notice"><ShieldCheck size={18}/><div><b>Modo assistido com IA</b><span>O assistente inteligente já está disponível. A voz depende das permissões e do suporte do navegador. Prospeção externa, contactos e publicação continuam a exigir confirmação e integrações próprias.</span></div></section>
