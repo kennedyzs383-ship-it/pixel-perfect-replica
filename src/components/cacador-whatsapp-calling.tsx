@@ -89,7 +89,12 @@ export function CacadorWhatsAppCalling() {
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(destination);
-    source.start();
+    // Keep the utterance queue occupied until playback finishes; otherwise
+    // a later transcription could start a second answer over this one.
+    await new Promise<void>((resolve) => {
+      source.onended = () => resolve();
+      source.start();
+    });
   }, []);
 
   const processCustomerAudio = useCallback((blob: Blob) => {
@@ -103,7 +108,7 @@ export function CacadorWhatsAppCalling() {
         const bytes = new Uint8Array(await blob.arrayBuffer());
         let binary = "";
         for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-        const transcription = await transcribeCacadorVoice({ data: { audioBase64: btoa(binary), mimeType: blob.type || "audio/webm" } });
+        const transcription = await transcribeCacadorVoice({ data: { audioBase64: btoa(binary), mimeType: (blob.type || "audio/webm").split(";")[0].toLowerCase() } });
         if (!transcription.text.trim() || peerRef.current !== callPeer) return;
         setStatus("Cliente: " + transcription.text.slice(0, 150) + " — a preparar resposta…");
         const answer = await askCacadorWithMcpFn({ data: { message: transcription.text, context: "Estás numa chamada WhatsApp em direto. Responde em português de Angola, de forma breve, natural e própria para ser dita em voz alta. Não afirmes que executaste ações externas sem autorização. Se o cliente pedir uma pessoa, informa que a chamada será encaminhada." } });
