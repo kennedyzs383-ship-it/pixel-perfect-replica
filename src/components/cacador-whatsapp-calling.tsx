@@ -48,11 +48,20 @@ export function CacadorWhatsAppCalling() {
   const voiceQueueRef = useRef<Promise<void>>(Promise.resolve());
   const recordingActiveRef = useRef(false);
   const recordingTimerRef = useRef<number | null>(null);
+  const activeSpeechSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const vadFrameRef = useRef<number | null>(null);
+  const remoteAnalyserRef = useRef<AnalyserNode | null>(null);
 
   const cleanup = useCallback(() => {
     recordingActiveRef.current = false;
     if (recordingTimerRef.current !== null) window.clearTimeout(recordingTimerRef.current);
     recordingTimerRef.current = null;
+    if (vadFrameRef.current !== null) window.cancelAnimationFrame(vadFrameRef.current);
+    vadFrameRef.current = null;
+    activeSpeechSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+    activeSpeechSourcesRef.current.clear();
+    remoteAnalyserRef.current?.disconnect();
+    remoteAnalyserRef.current = null;
     if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
     recorderRef.current = null;
     peerRef.current?.close();
@@ -89,10 +98,13 @@ export function CacadorWhatsAppCalling() {
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(destination);
-    // Keep the utterance queue occupied until playback finishes; otherwise
-    // a later transcription could start a second answer over this one.
+    // Track each utterance so customer speech can interrupt TTS (barge-in).
+    activeSpeechSourcesRef.current.add(source);
     await new Promise<void>((resolve) => {
-      source.onended = () => resolve();
+      source.onended = () => {
+        activeSpeechSourcesRef.current.delete(source);
+        resolve();
+      };
       source.start();
     });
   }, []);
@@ -140,6 +152,33 @@ export function CacadorWhatsAppCalling() {
       if (audioRef.current) {
         audioRef.current.srcObject = remoteStream;
         void audioRef.current.play().catch(() => setStatus("Permite a reprodução de áudio no navegador."));
+      }
+      if (audioContextRef.current && !remoteAnalyserRef.current) {
+        const analyser = audioContextRef.current.createAnalyser();
+        analyser.fftSize = 1024;
+        audioContextRef.current.createMediaStreamSource(remoteStream).connect(analyser);
+        remoteAnalyserRef.current = analyser;
+        const samples = new Uint8Array(analyser.fftSize);
+        let speechFrames = 0;
+        const detectCustomerSpeech = () => {
+          if (peerRef.current !== peer || !remoteAnalyserRef.current) return;
+          analyser.getByteTimeDomainData(samples);
+          let energy = 0;
+          for (const sample of samples) {
+            const normalized = (sample - 128) / 128;
+            energy += normalized * normalized;
+          }
+          const rms = Math.sqrt(energy / samples.length);
+          speechFrames = rms > 0.035 ? speechFrames + 1 : 0;
+          // Three consecutive energetic frames avoid stopping TTS on a single click/pop.
+          if (speechFrames >= 3 && activeSpeechSourcesRef.current.size) {
+            activeSpeechSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+            activeSpeechSourcesRef.current.clear();
+            setStatus("O cliente interrompeu a resposta. O Caçador está a ouvir…");
+          }
+          vadFrameRef.current = window.requestAnimationFrame(detectCustomerSpeech);
+        };
+        vadFrameRef.current = window.requestAnimationFrame(detectCustomerSpeech);
       }
       if (typeof MediaRecorder !== "undefined" && !recordingActiveRef.current) {
         const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
