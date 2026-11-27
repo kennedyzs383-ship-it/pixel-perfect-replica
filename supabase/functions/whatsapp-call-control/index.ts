@@ -80,7 +80,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     // Never place a business-initiated call unless Meta explicitly says start_call is allowed.
     if (action === "connect") {
       const permissionResponse = await fetch(
-        `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(String(phone).replace(/^\\+/, ""))}`,
+        `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(String(phone).replace(/^\+/, ""))}`,
         {
           method: "GET",
           headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
