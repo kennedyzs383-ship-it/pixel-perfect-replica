@@ -77,6 +77,36 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   try {
+    // Never place a business-initiated call unless Meta explicitly says start_call is allowed.
+    if (action === "connect") {
+      const permissionResponse = await fetch(
+        `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(String(phone).replace(/^\\+/, ""))}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+          signal: AbortSignal.timeout(15000),
+          redirect: "error",
+        },
+      );
+      const permission = await permissionResponse.json().catch(() => ({}));
+      if (!permissionResponse.ok) {
+        return json({
+          error: permission?.error?.message ?? "Could not verify the customer's WhatsApp call permission.",
+          code: permission?.error?.code ?? null,
+        }, permissionResponse.status >= 500 ? 502 : 400);
+      }
+      const canStartCall = Array.isArray(permission?.actions) &&
+        permission.actions.some((item: { action_name?: string; can_perform_action?: boolean }) =>
+          item.action_name === "start_call" && item.can_perform_action === true
+        );
+      if (!canStartCall) {
+        return json({
+          error: "A Meta ainda não confirma autorização para ligar a este cliente. Envia o pedido de autorização e aguarda a aprovação no WhatsApp.",
+          permission_status: permission?.permission?.status ?? "unknown",
+        }, 403);
+      }
+    }
+
     const response = await fetch(`https://graph.facebook.com/${graphVersion}/${path}`, {
       method,
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
