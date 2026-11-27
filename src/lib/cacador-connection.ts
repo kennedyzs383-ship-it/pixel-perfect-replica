@@ -1,4 +1,4 @@
-export const CACADOR_MODEL = 'openrouter/google/gemini-2.5-flash' as const;
+export const CACADOR_MODEL = 'openrouter/baidu/ernie-5.5-flash-preview:free' as const;
 export type ConnectionCode = 'connected' | 'unverified' | 'auth' | 'configuration' | 'denied' | 'quota' | 'credits' | 'timeout' | 'empty' | 'unavailable';
 export type CacadorConnection = { connected: boolean; code: ConnectionCode; message: string; checkedAt: string | null };
 export const initialConnection: CacadorConnection = { connected: false, code: 'unverified', message: 'Ligação ainda não verificada.', checkedAt: null };
