@@ -117,7 +117,7 @@ export function CacadorAIAssistant() {
     event?.preventDefault();
     const message = (prompt ?? input).trim();
     if (!message || busy) return;
-    if (!localReady) {
+    if (provider === "local" && !localReady) {
       setAiError("Carrega primeiro em «Ativar IA local» para descarregar o modelo gratuito para este dispositivo.");
       setInput(message);
       return;
@@ -129,7 +129,16 @@ export function CacadorAIAssistant() {
     setAiError("");
     try {
       const history = next.slice(-10).map((line) => ({ role: line.role, content: line.text }));
-      let answer: string;\n      if (provider === "local") {\n        answer = await askCacadorLocalAI(history);\n      } else if (provider === "ollama") {\n        answer = await askOllama(history);\n      } else {\n        const result = await askCacadorAI({ data: { message, context: history.slice(0, -1).map(item => item.content).join("\\n") } });\n        if (!result.connection.connected || !result.answer) throw new Error(result.connection.message);\n        answer = result.answer;\n      }
+      let answer: string;
+      if (provider === "local") {
+        answer = await askCacadorLocalAI(history);
+      } else if (provider === "ollama") {
+        answer = await askOllama(history);
+      } else {
+        const result = await askCacadorAI({ data: { message, context: history.slice(0, -1).map(item => item.content).join("\n") } });
+        if (!result.connection.connected || !result.answer) throw new Error(result.connection.message);
+        answer = result.answer;
+      }
       setMessages((previous) => [...previous, { role: "assistant", text: answer }]);
       speak(answer);
     } catch (error) {
