@@ -18,7 +18,6 @@ describe("WhatsApp call event helpers", () => {
   it("filters malformed call statuses before state handling", () => {
     expect(parseWhatsAppCallStatuses([null, 7, { call_id: "call-a", status: "FAILED" }, { call_id: 9, status: false }])).toEqual([
       { call_id: "call-a", status: "FAILED" },
-      {},
     ]);
   });
 
