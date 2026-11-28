@@ -186,11 +186,13 @@ export function CacadorWhatsAppCalling() {
     streamRef.current = stream;
     const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
     peerRef.current = peer;
-    stream.getAudioTracks().forEach((track) => peer.addTrack(track, stream));
     const audioContext = new AudioContext();
     audioContextRef.current = audioContext;
     const speechDestination = audioContext.createMediaStreamDestination();
     speechDestinationRef.current = speechDestination;
+    // Mix microphone and synthesized speech into one outbound audio track.
+    // Meta's Calling media path expects a single audio source/SSRC.
+    audioContext.createMediaStreamSource(stream).connect(speechDestination);
     speechDestination.stream.getAudioTracks().forEach((track) => peer.addTrack(track, speechDestination.stream));
     peer.ontrack = (event) => {
       const remoteStream = event.streams[0];
