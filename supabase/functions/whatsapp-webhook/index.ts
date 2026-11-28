@@ -2,6 +2,28 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const encoder = new TextEncoder();
 
+type ActiveWhatsAppChannel = {
+  id: string;
+  owner_id: string;
+  phone_number_id: string;
+  waba_id: string;
+};
+
+async function resolveActiveWhatsAppChannel(
+  supabase: ReturnType<typeof createClient>,
+  phoneNumberId: string,
+): Promise<ActiveWhatsAppChannel | null> {
+  if (!/^\\d{5,30}$/.test(phoneNumberId)) return null;
+  const { data, error } = await supabase
+    .from("whatsapp_business_channels")
+    .select("id, owner_id, phone_number_id, waba_id")
+    .eq("phone_number_id", phoneNumberId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error) throw new Error("Could not resolve WhatsApp Business channel: " + error.message);
+  return data as ActiveWhatsAppChannel | null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -85,17 +107,9 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
 
 
 async function broadcastIncomingMessages(payload: Record<string, unknown>): Promise<number> {
-  const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const configuredPhoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
-  if (!ownerId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
-    throw new Error("WHATSAPP_OWNER_ID is not configured as a valid account UUID.");
-  }
   if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase server credentials are not configured for message delivery.");
-  if (!configuredPhoneNumberId || !/^\d{5,30}$/.test(configuredPhoneNumberId)) {
-    throw new Error("WHATSAPP_PHONE_NUMBER_ID is not configured for message delivery.");
-  }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -108,7 +122,12 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
       if (!isRecord(change) || change.field !== "messages" || !isRecord(change.value)) continue;
       const value = change.value;
       const metadata = isRecord(value.metadata) ? value.metadata : null;
-      if (metadata?.phone_number_id !== configuredPhoneNumberId) continue;
+      const phoneNumberId = typeof metadata?.phone_number_id === "string" ? metadata.phone_number_id : "";
+      const channel = await resolveActiveWhatsAppChannel(supabase, phoneNumberId);
+      // Meta's signed webhook must identify the same WABA as the registered channel.
+      if (!channel || typeof entry.id !== "string" || channel.waba_id !== entry.id) continue;
+      const ownerId = channel.owner_id;
+      const configuredPhoneNumberId = channel.phone_number_id;
       const incoming = Array.isArray(value.messages) ? value.messages : [];
       const contacts = Array.isArray(value.contacts) ? value.contacts : [];
       const topic = "whatsapp-calls:" + ownerId;
@@ -146,6 +165,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
           event: "incoming_message",
           payload: {
             message_id: item.id,
+            channel_id: channel.id,
             from: item.from,
             timestamp: typeof item.timestamp === "string" ? item.timestamp : null,
             message_type: type,
