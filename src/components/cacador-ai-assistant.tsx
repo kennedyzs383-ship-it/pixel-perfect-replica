@@ -9,7 +9,7 @@ import { askOllama, type CacadorProvider } from "@/lib/cacador-ai-providers";
 import { supabase } from "@/integrations/supabase/client";
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandSparkles, Wrench, ShieldCheck } from "lucide-react";
 
-type ChatLine = { role: "user" | "assistant"; text: string; sender?: string };
+type ChatLine = { role: "user" | "assistant"; text: string; sender?: string; conversationId?: string };
 type IncomingWhatsAppMessage = { message_id: string; from: string; text: string; contact_name?: string | null; phone_number_id?: string };
 type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown> };
 const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
@@ -189,18 +189,26 @@ export function CacadorAIAssistant() {
               continue;
             }
           }
+          // Keep each customer's conversation isolated. The assistant panel also
+          // contains local chats and messages from other WhatsApp numbers; none of
+          // those may be sent to this customer's AI request.
+          const conversationId = "whatsapp:" + row.from_phone;
           const customerLine: ChatLine = {
             role: "user",
             sender: "WhatsApp · " + sender,
+            conversationId,
             text: incomingText.slice(0, 12000),
           };
 
           setBusy(true);
           setAiError("");
           try {
-            const context = messagesRef.current.slice(-8).concat(customerLine).map(line =>
-              (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
-            ).join("\n");
+            const context = messagesRef.current
+              .filter(line => line.conversationId === conversationId)
+              .slice(-8)
+              .concat(customerLine)
+              .map(line => (line.role === "user" ? "Cliente" : "Caçador") + ": " + line.text)
+              .join("\n");
             const result = await askCacadorWhatsAppWithMcpFn({
               data: {
                 message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + row.from_phone +
@@ -213,7 +221,7 @@ export function CacadorAIAssistant() {
             if (result.proposals.length) {
               setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[])]);
             }
-            setMessages(previous => [...previous, customerLine, ...(result.answer?.trim() ? [{ role: "assistant" as const, text: result.answer }] : [])].slice(-100));
+            setMessages(previous => [...previous, customerLine, ...(result.answer?.trim() ? [{ role: "assistant" as const, conversationId, text: result.answer }] : [])].slice(-100));
             if (result.answer?.trim()) {
               speakRef.current(result.answer);
             } else if (!result.proposals.length) {
