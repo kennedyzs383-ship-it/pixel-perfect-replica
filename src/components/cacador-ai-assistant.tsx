@@ -146,6 +146,11 @@ export function CacadorAIAssistant() {
             continue;
           }
           seenWhatsAppMessageIds.current.add(messageId);
+          // Keep the browser-side duplicate guard bounded during long-running sessions.
+          if (seenWhatsAppMessageIds.current.size > 500) {
+            const oldest = seenWhatsAppMessageIds.current.values().next().value;
+            if (oldest) seenWhatsAppMessageIds.current.delete(oldest);
+          }
 
           const sender = row.contact_name?.trim() || "+" + row.from_phone;
           let incomingText = typeof row.text_body === "string" ? row.text_body.trim() : "";
@@ -164,7 +169,10 @@ export function CacadorAIAssistant() {
                   p_id: row.id,
                   p_reason: reason.slice(0, 1000),
                 });
-                if (skipError) throw skipError;
+                if (skipError) {
+                  seenWhatsAppMessageIds.current.delete(messageId);
+                  throw skipError;
+                }
                 setMessages(previous => [...previous, {
                   role: "user",
                   sender: "WhatsApp · " + sender,
