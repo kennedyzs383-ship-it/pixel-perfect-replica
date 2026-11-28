@@ -28,6 +28,9 @@ export type Database = {
           meta_timestamp: string | null
           phone_number_id: string
           raw_message: Json
+          assistant_draft: string | null
+          assistant_proposals: Json
+          draft_status: string
           received_at: string
           created_at: string
           processing_status: string
@@ -51,6 +54,9 @@ export type Database = {
           meta_timestamp?: string | null
           phone_number_id: string
           raw_message?: Json
+          assistant_draft?: string | null
+          assistant_proposals?: Json
+          draft_status?: string
           received_at?: string
           created_at?: string
           processing_status?: string
@@ -74,6 +80,9 @@ export type Database = {
           meta_timestamp?: string | null
           phone_number_id?: string
           raw_message?: Json
+          assistant_draft?: string | null
+          assistant_proposals?: Json
+          draft_status?: string
           received_at?: string
           created_at?: string
           processing_status?: string
@@ -91,6 +100,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_whatsapp_inbox_messages_for_worker: { Args: { p_owner_id: string; p_phone_number_id: string; p_limit?: number }; Returns: Database["public"]["Tables"]["whatsapp_inbox_messages"]["Row"][] }
       claim_whatsapp_inbox_messages: { Args: { p_limit?: number }; Returns: Database["public"]["Tables"]["whatsapp_inbox_messages"]["Row"][] }
       complete_whatsapp_inbox_message: { Args: { p_id: string }; Returns: boolean }
       fail_whatsapp_inbox_message: { Args: { p_id: string; p_error: string }; Returns: boolean }
