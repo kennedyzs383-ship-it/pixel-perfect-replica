@@ -1,11 +1,18 @@
 begin;
 
-select plan(5);
+select plan(6);
 
 select has_table(
   'public',
   'whatsapp_business_channels',
   'Registry of owner-scoped WhatsApp Business channels exists'
+);
+
+select has_index(
+  'public',
+  'whatsapp_inbox_messages',
+  'whatsapp_inbox_owner_channel_message_uidx',
+  'Inbox event deduplication is scoped to owner and Business channel'
 );
 
 select has_column(
