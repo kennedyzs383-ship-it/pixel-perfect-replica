@@ -94,6 +94,7 @@ export type Database = {
       claim_whatsapp_inbox_messages: { Args: { p_limit?: number }; Returns: Database["public"]["Tables"]["whatsapp_inbox_messages"]["Row"][] }
       complete_whatsapp_inbox_message: { Args: { p_id: string }; Returns: boolean }
       fail_whatsapp_inbox_message: { Args: { p_id: string; p_error: string }; Returns: boolean }
+      skip_whatsapp_inbox_message: { Args: { p_id: string; p_reason?: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
