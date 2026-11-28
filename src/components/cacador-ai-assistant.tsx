@@ -11,7 +11,7 @@ import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandS
 
 type ChatLine = { role: "user" | "assistant"; text: string; sender?: string; conversationId?: string };
 type IncomingWhatsAppMessage = { message_id: string; from: string; text: string; contact_name?: string | null; phone_number_id?: string };
-type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown> };
+type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown>; origin?: "whatsapp"; conversationId?: string };
 const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
 async function whatsappMediaBlob(mediaId: string, messageId: string): Promise<Blob> {
   const { data, error } = await supabase.functions.invoke("whatsapp-media", {
@@ -219,7 +219,7 @@ export function CacadorAIAssistant() {
             });
             if (!active) break;
             if (result.proposals.length) {
-              setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[])]);
+              setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[]).map(proposal => ({ ...proposal, origin: "whatsapp" as const, conversationId }))]);
             }
             setMessages(previous => [...previous, customerLine, ...(result.answer?.trim() ? [{ role: "assistant" as const, conversationId, text: result.answer }] : [])].slice(-100));
             if (result.answer?.trim()) {
@@ -336,13 +336,36 @@ export function CacadorAIAssistant() {
       const result = await executeCacadorMcpTool({ data: { serverId: proposal.serverId, toolName: proposal.toolName, arguments: proposal.arguments } });
       const toolOutput = result.content || (result.isError ? "A ferramenta devolveu um erro." : JSON.stringify(result));
       setMcpProposals(current => current.filter(item => item.id !== proposal.id));
-      const summary = await askCacadorAI({ data: {
-        message: "A ferramenta " + proposal.toolName + " foi executada com aprovação do utilizador. Analisa o resultado abaixo e responde ao pedido original de forma clara. Se houve erro, explica-o sem afirmar sucesso.",
-        context: messages.slice(-8).map(line => line.role.toUpperCase() + ": " + line.text).join("\n") + "\nResultado da ferramenta:\n" + String(toolOutput).slice(0, 12000)
-      } });
-      if (!summary.connection.connected || !summary.answer) throw new Error(summary.connection.message || "Não foi possível resumir o resultado.");
-      setMessages(previous => [...previous, { role: "assistant", text: summary.answer }]);
-      speak(summary.answer);
+      const summaryContext = (proposal.origin === "whatsapp" && proposal.conversationId
+        ? messagesRef.current.filter(line => line.conversationId === proposal.conversationId).slice(-8)
+        : messagesRef.current.slice(-8))
+        .map(line => line.role.toUpperCase() + ": " + line.text).join("\n") +
+        "\nResultado da ferramenta:\n" + String(toolOutput).slice(0, 12000);
+      if (proposal.origin === "whatsapp") {
+        const summary = await askCacadorWhatsAppWithMcpFn({ data: {
+          message: "A ferramenta " + proposal.toolName + " foi executada com aprovação humana. Analisa o resultado e responde ao cliente de forma clara. Se houve erro, explica-o sem afirmar sucesso. Não executes novas ações sem aprovação.",
+          context: summaryContext,
+        } });
+        if (summary.proposals.length) {
+          setMcpProposals(current => [...current, ...(summary.proposals as McpProposal[]).map(item => ({
+            ...item, origin: "whatsapp" as const, conversationId: proposal.conversationId,
+          }))]);
+        }
+        if (summary.answer?.trim()) {
+          setMessages(previous => [...previous, { role: "assistant", conversationId: proposal.conversationId, text: summary.answer }]);
+          speak(summary.answer);
+        } else if (!summary.proposals.length) {
+          throw new Error("O cérebro WhatsApp não devolveu uma resposta após a execução.");
+        }
+      } else {
+        const summary = await askCacadorAI({ data: {
+          message: "A ferramenta " + proposal.toolName + " foi executada com aprovação do utilizador. Analisa o resultado abaixo e responde ao pedido original de forma clara. Se houve erro, explica-o sem afirmar sucesso.",
+          context: summaryContext,
+        } });
+        if (!summary.connection.connected || !summary.answer) throw new Error(summary.connection.message || "Não foi possível resumir o resultado.");
+        setMessages(previous => [...previous, { role: "assistant", text: summary.answer }]);
+        speak(summary.answer);
+      }
     } catch (error) {
       setAiError(error instanceof Error ? error.message : "Não foi possível executar ou interpretar o resultado MCP.");
     } finally { setBusy(false); }
