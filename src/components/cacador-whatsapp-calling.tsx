@@ -6,7 +6,7 @@ import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-vo
 import { getWhatsAppCallId, isTerminalWhatsAppCallStatus, parseWhatsAppCallEvents, parseWhatsAppCallStatuses, statusBelongsToCall, type WhatsAppCallEvent } from "@/lib/cacador-call-events";
 
 type CallEvent = WhatsAppCallEvent;
-type RecentWhatsAppCustomer = { from_phone: string; contact_name: string | null; received_at: string };
+type RecentWhatsAppCustomer = { from_phone: string; contact_name: string | null; received_at: string; phone_number_id: string };
 
 function waitForIceGathering(peer: RTCPeerConnection): Promise<void> {
   if (peer.iceGatheringState === "complete") return Promise.resolve();
@@ -92,11 +92,17 @@ export function CacadorWhatsAppCalling() {
   const loadRecentCustomers = useCallback(async () => {
     const { data, error } = await supabase
       .from("whatsapp_inbox_messages")
-      .select("from_phone, contact_name, received_at")
+      .select("from_phone, contact_name, received_at, phone_number_id")
       .order("received_at", { ascending: false })
       .limit(100);
     if (error) {
       setStatus("Não foi possível carregar os números recentes da inbox WhatsApp: " + error.message);
+      return;
+    }
+    const distinctChannels = new Set((data ?? []).map(row => row.phone_number_id).filter((id): id is string => typeof id === "string"));
+    if (distinctChannels.size > 1) {
+      setRecentCustomers([]);
+      setStatus("A inbox contém vários números Business. A seleção automática de clientes para chamadas fica suspensa até existir seleção explícita do canal de origem.");
       return;
     }
     const unique = new Map<string, RecentWhatsAppCustomer>();
@@ -106,6 +112,7 @@ export function CacadorWhatsAppCalling() {
         from_phone: row.from_phone,
         contact_name: row.contact_name,
         received_at: row.received_at,
+        phone_number_id: row.phone_number_id,
       });
     }
     setRecentCustomers(Array.from(unique.values()).slice(0, 20));
