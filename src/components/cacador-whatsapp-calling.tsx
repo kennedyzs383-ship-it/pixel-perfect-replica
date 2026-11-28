@@ -205,33 +205,11 @@ export function CacadorWhatsAppCalling() {
         remoteAnalyserRef.current = analyser;
         const samples = new Uint8Array(analyser.fftSize);
         let speechFrames = 0;
-        const detectCustomerSpeech = () => {
-          if (peerRef.current !== peer || !remoteAnalyserRef.current) return;
-          analyser.getByteTimeDomainData(samples);
-          let energy = 0;
-          for (const sample of samples) {
-            const normalized = (sample - 128) / 128;
-            energy += normalized * normalized;
-          }
-          const rms = Math.sqrt(energy / samples.length);
-          speechFrames = rms > 0.035 ? speechFrames + 1 : 0;
-          // Three consecutive energetic frames avoid stopping TTS on a single click/pop.
-          if (speechFrames >= 3 && activeSpeechSourcesRef.current.size) {
-            activeSpeechSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
-            activeSpeechSourcesRef.current.clear();
-            setStatus("O cliente interrompeu a resposta. O Caçador está a ouvir…");
-          }
-          vadFrameRef.current = window.requestAnimationFrame(detectCustomerSpeech);
-        };
-        vadFrameRef.current = window.requestAnimationFrame(detectCustomerSpeech);
-      }
-      if (typeof MediaRecorder !== "undefined" && !recordingActiveRef.current) {
-        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
-        recordingActiveRef.current = true;
-        // Each transcription receives a complete WebM file. MediaRecorder timeslice
-        // chunks after the first are not standalone files and must not be sent alone.
-        const recordCompleteSegment = () => {
-          if (!recordingActiveRef.current || peerRef.current !== peer) return;
+        let silenceFrames = 0;
+        let speakingNow = false;
+        const startSegmentRecording = () => {
+          if (!recordingActiveRef.current || peerRef.current !== peer || recorderRef.current) return;
+          const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
           const recorder = new MediaRecorder(remoteStream, mimeType ? { mimeType } : undefined);
           const chunks: BlobPart[] = [];
           recorderRef.current = recorder;
@@ -242,17 +220,61 @@ export function CacadorWhatsAppCalling() {
             if (recorderRef.current === recorder) recorderRef.current = null;
             if (!recordingActiveRef.current || peerRef.current !== peer) return;
             const segment = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-            // Start the next complete recording immediately; STT/LLM/TTS runs separately.
-            recordingTimerRef.current = window.setTimeout(recordCompleteSegment, 0);
-            processCustomerAudio(segment);
+            if (segment.size > 1200) processCustomerAudio(segment);
           };
           recorder.start();
+          // Bound a single utterance; if the customer keeps speaking, VAD starts
+          // the next segment without waiting for a fixed four-second recording loop.
           recordingTimerRef.current = window.setTimeout(() => {
+            recordingTimerRef.current = null;
             if (recorder.state !== "inactive") recorder.stop();
-          }, 4000);
+          }, 10000);
         };
-        recordCompleteSegment();
-        setStatus("Chamada ligada. O Caçador está a ouvir o cliente.");
+        const detectCustomerSpeech = () => {
+          if (peerRef.current !== peer || !remoteAnalyserRef.current) return;
+          analyser.getByteTimeDomainData(samples);
+          let energy = 0;
+          for (const sample of samples) {
+            const normalized = (sample - 128) / 128;
+            energy += normalized * normalized;
+          }
+          const rms = Math.sqrt(energy / samples.length);
+          if (rms > 0.035) {
+            speechFrames += 1;
+            silenceFrames = 0;
+          } else {
+            speechFrames = 0;
+            if (speakingNow) silenceFrames += 1;
+          }
+          // Three energetic frames reject clicks; 30 quiet frames mark end of utterance.
+          if (speechFrames >= 3) {
+            if (activeSpeechSourcesRef.current.size) {
+              activeSpeechSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+              activeSpeechSourcesRef.current.clear();
+              setStatus("O cliente interrompeu a resposta. O Caçador está a ouvir…");
+            }
+            if (!speakingNow) {
+              speakingNow = true;
+              startSegmentRecording();
+            }
+          }
+          if (speakingNow && silenceFrames >= 30) {
+            speakingNow = false;
+            silenceFrames = 0;
+            const recorder = recorderRef.current;
+            if (recordingTimerRef.current !== null) window.clearTimeout(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+            if (recorder && recorder.state !== "inactive") recorder.stop();
+          }
+          vadFrameRef.current = window.requestAnimationFrame(detectCustomerSpeech);
+        };
+        vadFrameRef.current = window.requestAnimationFrame(detectCustomerSpeech);
+      }
+      if (typeof MediaRecorder !== "undefined" && !recordingActiveRef.current) {
+        // Record only while the customer is speaking; VAD closes the utterance
+        // after a short silence instead of splitting speech into fixed time slices.
+        recordingActiveRef.current = true;
+        setStatus("Chamada ligada. O Caçador está à escuta do cliente.");
       }
     };
     peer.oniceconnectionstatechange = () => {
