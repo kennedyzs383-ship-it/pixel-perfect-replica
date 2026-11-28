@@ -52,13 +52,29 @@ create index if not exists whatsapp_business_channels_active_phone_idx
 
 alter table public.whatsapp_business_channels enable row level security;
 revoke all on public.whatsapp_business_channels from public, anon;
-grant select, insert, update, delete on public.whatsapp_business_channels to authenticated;
+grant select, insert, update on public.whatsapp_business_channels to authenticated;
 grant all on public.whatsapp_business_channels to service_role;
 
 drop policy if exists "owners manage their WhatsApp Business channels" on public.whatsapp_business_channels;
-create policy "owners manage their WhatsApp Business channels"
+drop policy if exists "owners read their WhatsApp Business channels" on public.whatsapp_business_channels;
+drop policy if exists "owners register their WhatsApp Business channels" on public.whatsapp_business_channels;
+drop policy if exists "owners update their WhatsApp Business channels" on public.whatsapp_business_channels;
+
+create policy "owners read their WhatsApp Business channels"
   on public.whatsapp_business_channels
-  for all
+  for select
+  to authenticated
+  using (owner_id = (select auth.uid()));
+
+create policy "owners register their WhatsApp Business channels"
+  on public.whatsapp_business_channels
+  for insert
+  to authenticated
+  with check (owner_id = (select auth.uid()));
+
+create policy "owners update their WhatsApp Business channels"
+  on public.whatsapp_business_channels
+  for update
   to authenticated
   using (owner_id = (select auth.uid()))
   with check (owner_id = (select auth.uid()));
