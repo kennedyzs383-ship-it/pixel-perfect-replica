@@ -40,7 +40,7 @@ select ok(
     from pg_policies
     where schemaname = 'public'
       and tablename = 'whatsapp_business_channels'
-      and policyname = 'owners manage their WhatsApp Business channels'
+      and policyname = 'owners read their WhatsApp Business channels'
       and roles @> array['authenticated']::name[]
   ),
   'Authenticated channel management policy is owner-scoped'
