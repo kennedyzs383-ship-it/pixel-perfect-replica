@@ -30,6 +30,13 @@ export type Database = {
           raw_message: Json
           received_at: string
           created_at: string
+          processing_status: string
+          attempt_count: number
+          next_attempt_at: string
+          locked_at: string | null
+          processed_at: string | null
+          last_error: string | null
+          updated_at: string
         }
         Insert: {
           id?: string
@@ -46,6 +53,13 @@ export type Database = {
           raw_message?: Json
           received_at?: string
           created_at?: string
+          processing_status?: string
+          attempt_count?: number
+          next_attempt_at?: string
+          locked_at?: string | null
+          processed_at?: string | null
+          last_error?: string | null
+          updated_at?: string
         }
         Update: {
           id?: string
@@ -62,6 +76,13 @@ export type Database = {
           raw_message?: Json
           received_at?: string
           created_at?: string
+          processing_status?: string
+          attempt_count?: number
+          next_attempt_at?: string
+          locked_at?: string | null
+          processed_at?: string | null
+          last_error?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -70,7 +91,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_whatsapp_inbox_messages: { Args: { p_limit?: number }; Returns: Database["public"]["Tables"]["whatsapp_inbox_messages"]["Row"][] }
+      complete_whatsapp_inbox_message: { Args: { p_id: string }; Returns: boolean }
+      fail_whatsapp_inbox_message: { Args: { p_id: string; p_error: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
