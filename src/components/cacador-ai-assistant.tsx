@@ -104,9 +104,8 @@ export function CacadorAIAssistant() {
             sender: "WhatsApp · " + sender,
             text: row.text_body?.slice(0, 4096) || "[Mensagem WhatsApp do tipo " + row.message_type + "; conteúdo multimédia ainda não interpretado.]",
           };
-          setMessages(previous => [...previous, customerLine].slice(-100));
-
           if (!row.text_body?.trim()) {
+            setMessages(previous => [...previous, customerLine].slice(-100));
             await supabase.rpc("complete_whatsapp_inbox_message", { p_id: row.id });
             setAiError("Foi recebida uma mensagem WhatsApp do tipo " + row.message_type + ". A mensagem ficou guardada, mas este tipo de conteúdo ainda não é interpretado pelo Caçador.");
             continue;
@@ -130,8 +129,8 @@ export function CacadorAIAssistant() {
             if (result.proposals.length) {
               setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[])]);
             }
+            setMessages(previous => [...previous, customerLine, ...(result.answer?.trim() ? [{ role: "assistant" as const, text: result.answer }] : [])].slice(-100));
             if (result.answer?.trim()) {
-              setMessages(previous => [...previous, { role: "assistant", text: result.answer }].slice(-100));
               speakRef.current(result.answer);
             } else if (!result.proposals.length) {
               throw new Error("O Z Router não preparou uma resposta; a mensagem será tentada novamente.");
@@ -142,6 +141,7 @@ export function CacadorAIAssistant() {
             );
             if (completeError) throw completeError;
           } catch (error) {
+            seenWhatsAppMessageIds.current.delete(messageId);
             await supabase.rpc("fail_whatsapp_inbox_message", {
               p_id: row.id,
               p_error: error instanceof Error ? error.message : "Falha ao encaminhar a mensagem ao Z Router.",
