@@ -77,52 +77,85 @@ export function CacadorAIAssistant() {
   useEffect(() => {
     let active = true;
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    const queue: IncomingWhatsAppMessage[] = [];
     let processing = false;
 
-    const drainQueue = async () => {
-      if (processing || !active) return;
+    const processPending = async () => {
+      if (!active || processing) return;
       processing = true;
-      while (queue.length && active) {
-        const incoming = queue.shift()!;
-        const sender = incoming.contact_name?.trim() || "+" + incoming.from;
-        const customerLine: ChatLine = {
-          role: "user",
-          sender: "WhatsApp · " + sender,
-          text: incoming.text,
-        };
-        setMessages(previous => [...previous, customerLine]);
-        setBusy(true);
-        setAiError("");
-        try {
-          const context = messagesRef.current.slice(-8).concat(customerLine).map(line =>
-            (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
-          ).join("\n");
-          const result = await askCacadorWithMcpFn({
-            data: {
-              message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + incoming.from +
-                ". Nome: " + sender + ". Mensagem: " + incoming.text +
-                ". Responde em português natural de Angola. Se for apropriado, prepara uma resposta WhatsApp usando a ferramenta send_text_message, mas nunca a envies sem aprovação humana.",
-              context,
-            },
-          });
+      try {
+        const { data: claimed, error: claimError } = await supabase.rpc(
+          "claim_whatsapp_inbox_messages",
+          { p_limit: 20 },
+        );
+        if (claimError) throw claimError;
+
+        for (const row of claimed ?? []) {
           if (!active) break;
-          if (result.proposals.length) {
-            setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[])]);
+          const messageId = row.message_id;
+          if (seenWhatsAppMessageIds.current.has(messageId)) {
+            await supabase.rpc("complete_whatsapp_inbox_message", { p_id: row.id });
+            continue;
           }
-          if (result.answer?.trim()) {
-            setMessages(previous => [...previous, { role: "assistant", text: result.answer }]);
-            speakRef.current(result.answer);
-          } else if (!result.proposals.length) {
-            setAiError("O Z Router recebeu a mensagem WhatsApp, mas não preparou uma resposta.");
+          seenWhatsAppMessageIds.current.add(messageId);
+
+          const sender = row.contact_name?.trim() || "+" + row.from_phone;
+          const customerLine: ChatLine = {
+            role: "user",
+            sender: "WhatsApp · " + sender,
+            text: row.text_body?.slice(0, 4096) || "[Mensagem WhatsApp do tipo " + row.message_type + "; conteúdo multimédia ainda não interpretado.]",
+          };
+          setMessages(previous => [...previous, customerLine].slice(-100));
+
+          if (!row.text_body?.trim()) {
+            await supabase.rpc("complete_whatsapp_inbox_message", { p_id: row.id });
+            setAiError("Foi recebida uma mensagem WhatsApp do tipo " + row.message_type + ". A mensagem ficou guardada, mas este tipo de conteúdo ainda não é interpretado pelo Caçador.");
+            continue;
           }
-        } catch (error) {
-          if (active) setAiError(error instanceof Error ? error.message : "Não foi possível encaminhar a mensagem WhatsApp ao Z Router.");
-        } finally {
-          if (active) setBusy(false);
+
+          setBusy(true);
+          setAiError("");
+          try {
+            const context = messagesRef.current.slice(-8).concat(customerLine).map(line =>
+              (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
+            ).join("\n");
+            const result = await askCacadorWithMcpFn({
+              data: {
+                message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + row.from_phone +
+                  ". Nome: " + sender + ". Mensagem: " + row.text_body +
+                  ". Responde em português natural de Angola. Se for apropriado, prepara uma resposta WhatsApp usando a ferramenta send_text_message, mas nunca a envies sem aprovação humana.",
+                context,
+              },
+            });
+            if (!active) break;
+            if (result.proposals.length) {
+              setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[])]);
+            }
+            if (result.answer?.trim()) {
+              setMessages(previous => [...previous, { role: "assistant", text: result.answer }].slice(-100));
+              speakRef.current(result.answer);
+            } else if (!result.proposals.length) {
+              throw new Error("O Z Router não preparou uma resposta; a mensagem será tentada novamente.");
+            }
+            const { error: completeError } = await supabase.rpc(
+              "complete_whatsapp_inbox_message",
+              { p_id: row.id },
+            );
+            if (completeError) throw completeError;
+          } catch (error) {
+            await supabase.rpc("fail_whatsapp_inbox_message", {
+              p_id: row.id,
+              p_error: error instanceof Error ? error.message : "Falha ao encaminhar a mensagem ao Z Router.",
+            });
+            if (active) setAiError(error instanceof Error ? error.message : "Não foi possível encaminhar a mensagem WhatsApp ao Z Router.");
+          } finally {
+            if (active) setBusy(false);
+          }
         }
+      } catch (error) {
+        if (active) setAiError(error instanceof Error ? error.message : "Não foi possível recuperar a caixa de entrada WhatsApp.");
+      } finally {
+        processing = false;
       }
-      processing = false;
     };
 
     void supabase.auth.getUser().then(async ({ data, error }) => {
@@ -131,59 +164,22 @@ export function CacadorAIAssistant() {
       if (sessionData.session?.access_token) await supabase.realtime.setAuth(sessionData.session.access_token);
       if (!active) return;
 
-      if (!active) return;
       channel = supabase.channel("whatsapp-calls:" + data.user.id, { config: { private: true } })
-        .on("broadcast", { event: "incoming_message" }, ({ payload }) => {
-          const item = payload as Partial<IncomingWhatsAppMessage>;
-          if (typeof item.message_id !== "string" || typeof item.from !== "string" ||
-            typeof item.text !== "string" || !item.text.trim()) return;
-          if (seenWhatsAppMessageIds.current.has(item.message_id)) return;
-          seenWhatsAppMessageIds.current.add(item.message_id);
-          if (seenWhatsAppMessageIds.current.size > 200) {
-            const oldest = seenWhatsAppMessageIds.current.values().next().value;
-            if (oldest) seenWhatsAppMessageIds.current.delete(oldest);
-          }
-          queue.push({
-            message_id: item.message_id,
-            from: item.from,
-            text: item.text.slice(0, 4096),
-            contact_name: typeof item.contact_name === "string" ? item.contact_name : null,
-            phone_number_id: typeof item.phone_number_id === "string" ? item.phone_number_id : undefined,
-          });
-          void drainQueue();
+        .on("broadcast", { event: "incoming_message" }, () => {
+          // Realtime is only a wake-up signal. Durable delivery comes from the inbox claim RPC.
+          void processPending();
         })
         .subscribe(async (state) => {
-          if (state !== "SUBSCRIBED" || !active) return;
-          // Query only after the realtime listener is active to close the
-          // reconnect gap. IDs already received live are skipped below.
-          const { data: inboxRows, error: inboxError } = await supabase
-            .from("whatsapp_inbox_messages")
-            .select("message_id,from_phone,contact_name,text_body,message_type,received_at")
-            .eq("owner_id", data.user.id)
-            .order("received_at", { ascending: true })
-            .limit(50);
-          if (!active) return;
-          if (inboxError) {
-            setAiError("Não foi possível recuperar o histórico WhatsApp: " + inboxError.message);
-            return;
-          }
-          const restored: ChatLine[] = [];
-          for (const row of inboxRows ?? []) {
-            if (seenWhatsAppMessageIds.current.has(row.message_id)) continue;
-            seenWhatsAppMessageIds.current.add(row.message_id);
-            if (typeof row.text_body !== "string" || !row.text_body.trim()) continue;
-            const sender = row.contact_name?.trim() || "+" + row.from_phone;
-            restored.push({ role: "user", sender: "WhatsApp · " + sender, text: row.text_body.slice(0, 4096) });
-          }
-          if (restored.length) setMessages(previous => [...previous, ...restored].slice(-100));
+          if (state === "SUBSCRIBED" && active) await processPending();
         });
     }).catch(() => {
-      if (active) setAiError("Não foi possível ligar o Caçador ao canal privado de mensagens WhatsApp.");
+      if (active) setAiError("Não foi possível ligar o Caçador à caixa de entrada WhatsApp.");
     });
 
+    const recoveryTimer = window.setInterval(() => { void processPending(); }, 15000);
     return () => {
       active = false;
-      queue.length = 0;
+      window.clearInterval(recoveryTimer);
       if (channel) void supabase.removeChannel(channel);
     };
   }, []);
