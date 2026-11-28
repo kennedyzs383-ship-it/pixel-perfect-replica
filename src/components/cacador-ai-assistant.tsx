@@ -34,28 +34,31 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
+class UnsupportedWhatsAppMediaError extends Error {}
+
 async function interpretWhatsAppMedia(row: {
   message_id: string;
   message_type: string;
   media_id?: string | null;
   media_mime_type?: string | null;
 }): Promise<string> {
-  if (!row.media_id) throw new Error("A mensagem multimédia não contém um media ID válido.");
+  if (!row.media_id) throw new UnsupportedWhatsAppMediaError("A mensagem multimédia não contém um media ID válido.");
   const blob = await whatsappMediaBlob(row.media_id, row.message_id);
   const mime = (row.media_mime_type || blob.type || "").split(";")[0].trim().toLowerCase();
   if (row.message_type === "audio") {
     const supported = new Set(["audio/webm", "audio/mp4", "audio/ogg", "audio/mpeg", "audio/wav", "audio/x-wav"]);
-    if (!supported.has(mime)) throw new Error("O áudio foi recebido, mas o formato " + (mime || "desconhecido") + " ainda não é suportado para transcrição.");
+    if (!supported.has(mime)) throw new UnsupportedWhatsAppMediaError("O áudio foi recebido, mas o formato " + (mime || "desconhecido") + " ainda não é suportado para transcrição.");
+    if (blob.size > 8_000_000) throw new UnsupportedWhatsAppMediaError("O áudio excede o limite de 8 MB do serviço de transcrição.");
     const result = await transcribeCacadorVoice({ data: { audioBase64: await blobToBase64(blob), mimeType: mime } });
     if (!result.text?.trim()) throw new Error("Não foi possível reconhecer fala no áudio recebido.");
     return "[Áudio WhatsApp transcrito]: " + result.text.trim().slice(0, 12000);
   }
   if (row.message_type === "document" && mime === "text/plain") {
     const text = (await blob.text()).trim();
-    if (!text) throw new Error("O documento de texto está vazio.");
+    if (!text) throw new UnsupportedWhatsAppMediaError("O documento de texto está vazio.");
     return "[Documento WhatsApp]: " + text.slice(0, 12000);
   }
-  throw new Error("A mensagem WhatsApp do tipo " + row.message_type + " (" + (mime || "MIME desconhecido") + ") foi guardada, mas ainda não existe um interpretador seguro configurado para este formato.");
+  throw new UnsupportedWhatsAppMediaError("A mensagem WhatsApp do tipo " + row.message_type + " (" + (mime || "MIME desconhecido") + ") foi guardada, mas ainda não existe um interpretador seguro configurado para este formato.");
 }
 
 function readStoredMessages(): ChatLine[] {
@@ -155,17 +158,25 @@ export function CacadorAIAssistant() {
                 media_mime_type: row.media_mime_type,
               });
             } catch (mediaError) {
-              const reason = mediaError instanceof Error ? mediaError.message : "Formato multimédia não suportado.";
-              const { error: skipError } = await supabase.rpc("skip_whatsapp_inbox_message", {
-                p_id: row.id,
-                p_reason: reason.slice(0, 1000),
-              });
-              if (skipError) throw skipError;
-              setMessages(previous => [...previous, {
-                role: "user",
-                sender: "WhatsApp · " + sender,
-                text: "[Multimédia recebida e guardada, mas não interpretada: " + reason + "]",
-              }].slice(-100));
+              const reason = mediaError instanceof Error ? mediaError.message : "Falha ao processar multimédia WhatsApp.";
+              if (mediaError instanceof UnsupportedWhatsAppMediaError) {
+                const { error: skipError } = await supabase.rpc("skip_whatsapp_inbox_message", {
+                  p_id: row.id,
+                  p_reason: reason.slice(0, 1000),
+                });
+                if (skipError) throw skipError;
+                setMessages(previous => [...previous, {
+                  role: "user",
+                  sender: "WhatsApp · " + sender,
+                  text: "[Multimédia recebida e guardada, mas não interpretada: " + reason + "]",
+                }].slice(-100));
+              } else {
+                seenWhatsAppMessageIds.current.delete(messageId);
+                await supabase.rpc("fail_whatsapp_inbox_message", {
+                  p_id: row.id,
+                  p_error: reason.slice(0, 1000),
+                });
+              }
               setAiError(reason);
               continue;
             }
