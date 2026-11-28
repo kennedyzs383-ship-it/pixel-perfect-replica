@@ -142,6 +142,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
           .from("whatsapp_inbox_messages")
           .upsert({
             owner_id: ownerId,
+            channel_id: businessChannel.id,
             message_id: item.id,
             from_phone: item.from,
             contact_name: contactNameFrom(contacts, item.from),
