@@ -71,7 +71,9 @@ begin
     end if;
   end if;
 
-  if new.status = 'active' and request_role <> 'service_role' then
+  if new.status = 'active'
+    and (tg_op = 'INSERT' or old.status is distinct from 'active')
+    and request_role <> 'service_role' then
     raise exception 'A WhatsApp channel can only be activated by the trusted Meta verification flow'
       using errcode = '42501';
   end if;
