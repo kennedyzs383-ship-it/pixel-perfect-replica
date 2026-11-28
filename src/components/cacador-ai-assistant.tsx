@@ -2,14 +2,65 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { askCacadorLocalAI, loadCacadorLocalAI, type LocalAIProgress } from "@/lib/cacador-local-ai";
 import { askCacadorAI } from "@/lib/cacador-ai.functions";
-import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
+import { askCacadorWithMcpFn, askCacadorWhatsAppWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
+import { transcribeCacadorVoice } from "@/lib/cacador-voice.functions";
 import { executeCacadorMcpTool } from "@/lib/cacador-mcp.functions";
 import { askOllama, type CacadorProvider } from "@/lib/cacador-ai-providers";
+import { supabase } from "@/integrations/supabase/client";
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandSparkles, Wrench, ShieldCheck } from "lucide-react";
 
-type ChatLine = { role: "user" | "assistant"; text: string };
-type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown> };
+type ChatLine = { role: "user" | "assistant"; text: string; sender?: string; conversationId?: string };
+type IncomingWhatsAppMessage = { message_id: string; from: string; text: string; contact_name?: string | null; phone_number_id?: string };
+type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown>; origin?: "whatsapp"; conversationId?: string; inboxMessageId?: string };
 const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
+async function whatsappMediaBlob(mediaId: string, messageId: string): Promise<Blob> {
+  const { data, error } = await supabase.functions.invoke("whatsapp-media", {
+    body: { media_id: mediaId, message_id: messageId },
+    responseType: "blob",
+  });
+  if (error) throw new Error(error.message || "Não foi possível recuperar o ficheiro WhatsApp.");
+  if (!(data instanceof Blob) || data.size === 0 || data.size > 20 * 1024 * 1024) {
+    throw new Error("A Meta devolveu um ficheiro vazio ou acima do limite de 20 MB.");
+  }
+  return data;
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+class UnsupportedWhatsAppMediaError extends Error {}
+
+async function interpretWhatsAppMedia(row: {
+  message_id: string;
+  message_type: string;
+  media_id?: string | null;
+  media_mime_type?: string | null;
+}): Promise<string> {
+  if (!row.media_id) throw new UnsupportedWhatsAppMediaError("A mensagem multimédia não contém um media ID válido.");
+  const blob = await whatsappMediaBlob(row.media_id, row.message_id);
+  const mime = (row.media_mime_type || blob.type || "").split(";")[0].trim().toLowerCase();
+  if (row.message_type === "audio") {
+    const supported = new Set(["audio/webm", "audio/mp4", "audio/ogg", "audio/mpeg", "audio/wav", "audio/x-wav"]);
+    if (!supported.has(mime)) throw new UnsupportedWhatsAppMediaError("O áudio foi recebido, mas o formato " + (mime || "desconhecido") + " ainda não é suportado para transcrição.");
+    if (blob.size > 8_000_000) throw new UnsupportedWhatsAppMediaError("O áudio excede o limite de 8 MB do serviço de transcrição.");
+    const result = await transcribeCacadorVoice({ data: { audioBase64: await blobToBase64(blob), mimeType: mime } });
+    if (!result.text?.trim()) throw new Error("Não foi possível reconhecer fala no áudio recebido.");
+    return "[Áudio WhatsApp transcrito]: " + result.text.trim().slice(0, 12000);
+  }
+  if (row.message_type === "document" && mime === "text/plain") {
+    const text = (await blob.text()).trim();
+    if (!text) throw new UnsupportedWhatsAppMediaError("O documento de texto está vazio.");
+    return "[Documento WhatsApp]: " + text.slice(0, 12000);
+  }
+  throw new UnsupportedWhatsAppMediaError("A mensagem WhatsApp do tipo " + row.message_type + " (" + (mime || "MIME desconhecido") + ") foi guardada, mas ainda não existe um interpretador seguro configurado para este formato.");
+}
+
 function readStoredMessages(): ChatLine[] {
   if (typeof window === "undefined") return [];
   try {
@@ -58,6 +109,10 @@ export function CacadorAIAssistant() {
   const recognition = useRef<SpeechRecognitionLike | null>(null);
   const sendVoicePrompt = useRef<((prompt: string) => void) | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
+  const seenWhatsAppMessageIds = useRef<Set<string>>(new Set());
+  const messagesRef = useRef(messages);
+  const speakRef = useRef<(text: string) => void>(() => undefined);
+  messagesRef.current = messages;
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -66,6 +121,198 @@ export function CacadorAIAssistant() {
   useEffect(() => {
     try { window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-100))); } catch { /* Storage may be unavailable or full. */ }
   }, [messages]);
+
+
+  useEffect(() => {
+    let active = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let processing = false;
+
+    const processPending = async () => {
+      if (!active || processing) return;
+      processing = true;
+      try {
+        const { data: claimed, error: claimError } = await supabase.rpc(
+          "claim_whatsapp_inbox_messages",
+          { p_limit: 20 },
+        );
+        if (claimError) throw claimError;
+
+        for (const row of claimed ?? []) {
+          if (!active) break;
+          const messageId = row.message_id;
+          if (seenWhatsAppMessageIds.current.has(messageId)) {
+            await supabase.rpc("complete_whatsapp_inbox_message", { p_id: row.id });
+            continue;
+          }
+          seenWhatsAppMessageIds.current.add(messageId);
+          // Keep the browser-side duplicate guard bounded during long-running sessions.
+          if (seenWhatsAppMessageIds.current.size > 500) {
+            const oldest = seenWhatsAppMessageIds.current.values().next().value;
+            if (oldest) seenWhatsAppMessageIds.current.delete(oldest);
+          }
+
+          const sender = row.contact_name?.trim() || "+" + row.from_phone;
+          let incomingText = typeof row.text_body === "string" ? row.text_body.trim() : "";
+          if (!incomingText) {
+            try {
+              incomingText = await interpretWhatsAppMedia({
+                message_id: row.message_id,
+                message_type: row.message_type,
+                media_id: row.media_id,
+                media_mime_type: row.media_mime_type,
+              });
+            } catch (mediaError) {
+              const reason = mediaError instanceof Error ? mediaError.message : "Falha ao processar multimédia WhatsApp.";
+              if (mediaError instanceof UnsupportedWhatsAppMediaError) {
+                const { error: skipError } = await supabase.rpc("skip_whatsapp_inbox_message", {
+                  p_id: row.id,
+                  p_reason: reason.slice(0, 1000),
+                });
+                if (skipError) {
+                  seenWhatsAppMessageIds.current.delete(messageId);
+                  throw skipError;
+                }
+                setMessages(previous => [...previous, {
+                  role: "user",
+                  sender: "WhatsApp · " + sender,
+                  text: "[Multimédia recebida e guardada, mas não interpretada: " + reason + "]",
+                }].slice(-100));
+              } else {
+                seenWhatsAppMessageIds.current.delete(messageId);
+                await supabase.rpc("fail_whatsapp_inbox_message", {
+                  p_id: row.id,
+                  p_error: reason.slice(0, 1000),
+                });
+              }
+              setAiError(reason);
+              continue;
+            }
+          }
+          // Keep each customer's conversation isolated. The assistant panel also
+          // contains local chats and messages from other WhatsApp numbers; none of
+          // those may be sent to this customer's AI request.
+          const conversationId = "whatsapp:" + (row.phone_number_id || "default") + ":" + row.from_phone;
+          const customerLine: ChatLine = {
+            role: "user",
+            sender: "WhatsApp · " + sender,
+            conversationId,
+            text: incomingText.slice(0, 12000),
+          };
+
+          setBusy(true);
+          setAiError("");
+          try {
+            const context = messagesRef.current
+              .filter(line => line.conversationId === conversationId)
+              .slice(-8)
+              .concat(customerLine)
+              .map(line => (line.role === "user" ? "Cliente" : "Caçador") + ": " + line.text)
+              .join("\n");
+            const result = await askCacadorWhatsAppWithMcpFn({
+              data: {
+                message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + row.from_phone +
+                  ". Nome: " + sender + ". Mensagem: " + incomingText +
+                  ". Responde em português natural de Angola. Se for apropriado, prepara uma resposta WhatsApp usando a ferramenta send_text_message, mas nunca a envies sem aprovação humana.",
+                context,
+              },
+            });
+            if (!active) break;
+            if (result.proposals.length) {
+              setMcpProposals(previous => [...previous, ...(result.proposals as McpProposal[]).map(proposal => ({ ...proposal, origin: "whatsapp" as const, conversationId }))]);
+            }
+            setMessages(previous => [...previous, customerLine, ...(result.answer?.trim() ? [{ role: "assistant" as const, conversationId, text: result.answer }] : [])].slice(-100));
+            if (result.answer?.trim()) {
+              speakRef.current(result.answer);
+            } else if (!result.proposals.length) {
+              throw new Error("O cérebro configurado na MCP não preparou uma resposta; a mensagem será tentada novamente.");
+            }
+            const { error: completeError } = await supabase.rpc(
+              "complete_whatsapp_inbox_message",
+              { p_id: row.id },
+            );
+            if (completeError) throw completeError;
+          } catch (error) {
+            seenWhatsAppMessageIds.current.delete(messageId);
+            await supabase.rpc("fail_whatsapp_inbox_message", {
+              p_id: row.id,
+              p_error: error instanceof Error ? error.message : "Falha ao encaminhar a mensagem ao cérebro configurado na MCP.",
+            });
+            if (active) setAiError(error instanceof Error ? error.message : "Não foi possível encaminhar a mensagem WhatsApp ao cérebro configurado na MCP.");
+          } finally {
+            if (active) setBusy(false);
+          }
+        }
+      } catch (error) {
+        if (active) setAiError(error instanceof Error ? error.message : "Não foi possível recuperar a caixa de entrada WhatsApp.");
+      } finally {
+        processing = false;
+      }
+    };
+
+    void supabase.auth.getUser().then(async ({ data, error }) => {
+      if (!active || error || !data.user) return;
+
+      // Restore drafts prepared by the background worker while the dashboard was closed.
+      // RLS plus the explicit owner filter prevent another owner's drafts from appearing.
+      const { data: pendingDrafts, error: draftsError } = await supabase
+        .from("whatsapp_inbox_messages")
+        .select("id,message_id,from_phone,contact_name,text_body,assistant_draft,assistant_proposals,phone_number_id,received_at")
+        .eq("owner_id", data.user.id)
+        .eq("draft_status", "pending_approval")
+        .order("received_at", { ascending: true })
+        .limit(30);
+      if (draftsError) {
+        if (active) setAiError("Não foi possível recuperar as propostas WhatsApp pendentes.");
+      } else if (active) {
+        for (const draft of pendingDrafts ?? []) {
+          const conversationId = "whatsapp:" + draft.phone_number_id + ":" + draft.from_phone;
+          const sender = draft.contact_name?.trim() || "+" + draft.from_phone;
+          const lines: ChatLine[] = [];
+          if (draft.text_body?.trim()) lines.push({
+            role: "user", sender: "WhatsApp · " + sender, conversationId, text: draft.text_body.trim(),
+          });
+          if (draft.assistant_draft?.trim()) lines.push({
+            role: "assistant", conversationId, text: "[Rascunho para revisão — ainda não enviado]: " + draft.assistant_draft.trim(),
+          });
+          if (lines.length) setMessages(previous => [...previous, ...lines].slice(-100));
+          const storedProposals = Array.isArray(draft.assistant_proposals) ? draft.assistant_proposals : [];
+          const restored = storedProposals.flatMap(item => {
+            if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+            const proposal = item as unknown as McpProposal;
+            if (typeof proposal.id !== "string" || typeof proposal.serverId !== "string" ||
+                typeof proposal.toolName !== "string" || !proposal.arguments || typeof proposal.arguments !== "object") return [];
+            return [{ ...proposal, origin: "whatsapp" as const, conversationId, inboxMessageId: draft.id }];
+          });
+          if (restored.length) setMcpProposals(previous => [
+            ...previous.filter(item => item.inboxMessageId !== draft.id), ...restored,
+          ]);
+        }
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.access_token) await supabase.realtime.setAuth(sessionData.session.access_token);
+      if (!active) return;
+
+      channel = supabase.channel("whatsapp-calls:" + data.user.id, { config: { private: true } })
+        .on("broadcast", { event: "incoming_message" }, () => {
+          // Realtime is only a wake-up signal. Durable delivery comes from the inbox claim RPC.
+          void processPending();
+        })
+        .subscribe(async (state) => {
+          if (state === "SUBSCRIBED" && active) await processPending();
+        });
+    }).catch(() => {
+      if (active) setAiError("Não foi possível ligar o Caçador à caixa de entrada WhatsApp.");
+    });
+
+    const recoveryTimer = window.setInterval(() => { void processPending(); }, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(recoveryTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, []);
 
   useEffect(() => () => {
     recognition.current?.stop();
@@ -81,6 +328,8 @@ export function CacadorAIAssistant() {
     utterance.pitch = 1;
     window.speechSynthesis.speak(utterance);
   };
+
+  speakRef.current = speak;
 
   const toggleListening = () => {
     if (listening) {
@@ -117,22 +366,81 @@ export function CacadorAIAssistant() {
     }
   };
 
+  const rejectMcpProposal = async (proposal: McpProposal) => {
+    if (proposal.inboxMessageId) {
+      const { data: rejected, error } = await supabase.rpc("set_whatsapp_inbox_draft_status", {
+        p_id: proposal.inboxMessageId, p_status: "rejected",
+      });
+      if (error || !rejected) {
+        setAiError(error?.message || "A proposta já não está pendente ou não pertence a esta conta.");
+        return;
+      }
+    }
+    setMcpProposals(current => current.filter(item => item.id !== proposal.id));
+    setMessages(previous => [...previous, {
+      role: "assistant",
+      conversationId: proposal.conversationId,
+      text: "A proposta " + proposal.toolName + " foi rejeitada. Nenhuma ação foi executada.",
+    }]);
+  };
+
   const approveMcpProposal = async (proposal: McpProposal) => {
     if (!window.confirm("Autorizar " + proposal.toolName + " no servidor " + proposal.serverName + "? Revê os argumentos antes de continuar.")) return;
     setBusy(true);
     setAiError("");
+    let approvalPersisted = false;
+    let toolExecuted = false;
     try {
+      if (proposal.inboxMessageId) {
+        const { data: acknowledged, error: approvalError } = await supabase.rpc("set_whatsapp_inbox_draft_status", {
+          p_id: proposal.inboxMessageId, p_status: "approved",
+        });
+        if (approvalError || !acknowledged) throw approvalError || new Error("A proposta já não está pendente ou não pertence a esta conta.");
+        approvalPersisted = true;
+      }
       const result = await executeCacadorMcpTool({ data: { serverId: proposal.serverId, toolName: proposal.toolName, arguments: proposal.arguments } });
-      const toolOutput = result.content || (result.isError ? "A ferramenta devolveu um erro." : JSON.stringify(result));
+      if (result.isError) throw new Error(result.content || "A ferramenta devolveu um erro.");
+      toolExecuted = true;
+      const toolOutput = result.content || JSON.stringify(result);
       setMcpProposals(current => current.filter(item => item.id !== proposal.id));
-      const summary = await askCacadorAI({ data: {
-        message: "A ferramenta " + proposal.toolName + " foi executada com aprovação do utilizador. Analisa o resultado abaixo e responde ao pedido original de forma clara. Se houve erro, explica-o sem afirmar sucesso.",
-        context: messages.slice(-8).map(line => line.role.toUpperCase() + ": " + line.text).join("\n") + "\nResultado da ferramenta:\n" + String(toolOutput).slice(0, 12000)
-      } });
-      if (!summary.connection.connected || !summary.answer) throw new Error(summary.connection.message || "Não foi possível resumir o resultado.");
-      setMessages(previous => [...previous, { role: "assistant", text: summary.answer }]);
-      speak(summary.answer);
+      const summaryContext = (proposal.origin === "whatsapp" && proposal.conversationId
+        ? messagesRef.current.filter(line => line.conversationId === proposal.conversationId).slice(-8)
+        : messagesRef.current.slice(-8))
+        .map(line => line.role.toUpperCase() + ": " + line.text).join("\n") +
+        "\nResultado da ferramenta:\n" + String(toolOutput).slice(0, 12000);
+      if (proposal.origin === "whatsapp") {
+        const summary = await askCacadorWhatsAppWithMcpFn({ data: {
+          message: "A ferramenta " + proposal.toolName + " foi executada com aprovação humana. Analisa o resultado e responde ao cliente de forma clara. Se houve erro, explica-o sem afirmar sucesso. Não executes novas ações sem aprovação.",
+          context: summaryContext,
+        } });
+        if (summary.proposals.length) {
+          setMcpProposals(current => [...current, ...(summary.proposals as McpProposal[]).map(item => ({
+            ...item, origin: "whatsapp" as const, conversationId: proposal.conversationId,
+          }))]);
+        }
+        if (summary.answer?.trim()) {
+          setMessages(previous => [...previous, { role: "assistant", conversationId: proposal.conversationId, text: summary.answer }]);
+          speak(summary.answer);
+        } else if (!summary.proposals.length) {
+          throw new Error("O cérebro WhatsApp não devolveu uma resposta após a execução.");
+        }
+      } else {
+        const summary = await askCacadorAI({ data: {
+          message: "A ferramenta " + proposal.toolName + " foi executada com aprovação do utilizador. Analisa o resultado abaixo e responde ao pedido original de forma clara. Se houve erro, explica-o sem afirmar sucesso.",
+          context: summaryContext,
+        } });
+        if (!summary.connection.connected || !summary.answer) throw new Error(summary.connection.message || "Não foi possível resumir o resultado.");
+        setMessages(previous => [...previous, { role: "assistant", text: summary.answer }]);
+        speak(summary.answer);
+      }
     } catch (error) {
+      // Re-open a proposal only when execution definitely did not complete. If execution
+      // succeeded but a later summary failed, keep it acknowledged to prevent duplicate sends.
+      if (approvalPersisted && !toolExecuted && proposal.inboxMessageId) {
+        await supabase.rpc("set_whatsapp_inbox_draft_status", {
+          p_id: proposal.inboxMessageId, p_status: "pending_approval",
+        });
+      }
       setAiError(error instanceof Error ? error.message : "Não foi possível executar ou interpretar o resultado MCP.");
     } finally { setBusy(false); }
   };
@@ -194,7 +502,7 @@ export function CacadorAIAssistant() {
     </div>
     <div className="hunter-ai-intro"><Sparkles size={15}/> {provider === "local" ? <>A IA funciona neste dispositivo, sem chave de API nem cobrança por mensagem. O primeiro carregamento descarrega cerca de 500 MB; mantém esta página aberta até terminar. {modelProgress.text} {loadingModel ? `(${modelProgress.percent}%)` : ""}</> : provider === "ollama" ? <>A usar Ollama no endereço configurado em Definições. O computador/servidor executa o modelo e não há cobrança por mensagem do Caçador.</> : <>A usar Z Router no servidor. Esta opção depende da secret e dos limites/créditos do fornecedor.</>}</div>
     <div className="hunter-ai-messages" aria-live="polite">
-      {messages.map((line, index) => <div className={"hunter-ai-message " + line.role} key={index}><span>{line.role === "assistant" ? "CAÇADOR" : "TU"}</span><p>{line.text}</p></div>)}
+      {messages.map((line, index) => <div className={"hunter-ai-message " + line.role} key={index}><span>{line.sender || (line.role === "assistant" ? "CAÇADOR" : "TU")}</span><p>{line.text}</p></div>)}
       {busy && <div className="hunter-ai-message assistant"><span>CAÇADOR</span><p className="ai-thinking">A analisar o teu pedido…</p></div>}
       <div ref={bottom}/>
     </div>
@@ -204,7 +512,10 @@ export function CacadorAIAssistant() {
         <b><Wrench size={13}/> {proposal.toolName} · {proposal.serverName}</b>
         {proposal.description && <p>{proposal.description}</p>}
         <pre>{JSON.stringify(proposal.arguments, null, 2)}</pre>
-        <button type="button" disabled={busy} onClick={() => void approveMcpProposal(proposal)}>Confirmar e executar</button>
+        <div className="hunter-ai-mcp-actions">
+          <button type="button" disabled={busy} onClick={() => void approveMcpProposal(proposal)}>Confirmar e executar</button>
+          <button type="button" className="hunter-ai-mcp-reject" disabled={busy} onClick={() => void rejectMcpProposal(proposal)}>Rejeitar proposta</button>
+        </div>
       </div>)}
     </div>}
     {aiError && <p className="hunter-ai-error" role="alert">{aiError}</p>}

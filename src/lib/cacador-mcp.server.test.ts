@@ -13,8 +13,9 @@ describe('Caçador MCP client', () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 202 }));
     fetchMock.mockResolvedValueOnce(Response.json({ jsonrpc: '2.0', id: 2, result: { tools: [{ name: 'search_docs', description: 'Pesquisa documentos' }, { name: 'delete_all', description: 'Not allowed' }] } }));
     const result = await listCacadorMcpTools();
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ id: 'docs', connected: true, tools: [{ name: 'search_docs' }] });
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ id: 'whatsapp-meta', connected: true, tools: [{ name: 'get_connection_status' }, { name: 'get_call_settings' }, { name: 'get_call_permission_status' }, { name: 'request_call_permission' }, { name: 'manage_voice_call' }, { name: 'send_text_message' }, { name: 'send_template_message' }, { name: 'send_audio_message' }] });
+    expect(result[1]).toMatchObject({ id: 'docs', connected: true, tools: [{ name: 'search_docs' }] });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ method: 'notifications/initialized' });
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('id');
@@ -34,7 +35,7 @@ describe('Caçador MCP client', () => {
   });
   it('ignores HTTP MCP endpoints in production', async () => {
     vi.stubEnv('CACADOR_MCP_SERVERS_JSON', JSON.stringify([{ id: 'unsafe', name: 'Unsafe', url: 'http://127.0.0.1:1234', allowedTools: ['x'] }]));
-    expect(await listCacadorMcpTools()).toEqual([]);
+    expect(await listCacadorMcpTools()).toMatchObject([{ id: 'whatsapp-meta', connected: true }]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

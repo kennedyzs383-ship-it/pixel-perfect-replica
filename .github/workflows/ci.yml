@@ -22,3 +22,24 @@ jobs:
         run: bun run test
       - name: Construir aplicação
         run: bun run build
+      - name: Preparar Deno para Edge Functions
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verificar worker autónomo WhatsApp
+        run: deno check supabase/functions/whatsapp-inbox-worker/index.ts
+      - name: Verificar webhook multi-tenant WhatsApp
+        run: deno check supabase/functions/whatsapp-webhook/index.ts
+      - name: Preparar Supabase CLI para testes locais
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.81.3
+      - name: Iniciar Supabase local (sem ligação a projetos remotos)
+        run: supabase start
+      - name: Aplicar migrations apenas na base local descartável
+        run: supabase db reset
+      - name: Testar migrations e políticas RLS com pgTAP
+        run: supabase test db
+      - name: Parar Supabase local
+        if: always()
+        run: if command -v supabase >/dev/null 2>&1; then supabase stop --no-backup; else echo 'Supabase CLI was not installed; nothing to stop.'; fi
