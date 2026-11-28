@@ -15,7 +15,7 @@ function whatsappBrainConfig(): BrainConfig {
   if (provider === 'zrouter') {
     const apiKey = process.env.ZROUTER_API_KEY;
     if (!apiKey) throw new Error('O cérebro WhatsApp está definido como Z Router, mas falta ZROUTER_API_KEY.');
-    return { provider, apiKey, endpoint: 'https://www.zrouter.com/v1/chat/completions', model: brain.model, label: 'Z Router' };
+    return { provider, apiKey, endpoint: 'https://www.zrouter.com/v1/chat/completions', model: process.env.ZROUTER_MODEL || CACADOR_MODEL, label: 'Z Router' };
   }
   if (provider === 'lovable') {
     const apiKey = process.env.LOVABLE_API_KEY;
@@ -54,7 +54,7 @@ async function askCacadorWithMcpUsingBrain(message: string, context: string, bra
     method: 'POST',
     headers: { Authorization: `Bearer ${brain.apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: process.env.ZROUTER_MODEL || CACADOR_MODEL,
+      model: brain.model,
       messages: [
         { role: 'system', content: systemPrompt },
         ...(context ? [{ role: 'user', content: `Contexto da conversa:\n${context}` }] : []),
