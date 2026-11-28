@@ -91,3 +91,7 @@ O número de origem tem de ser elegível para Calling e estar registado na Cloud
 - A PR permanece em draft, aberta e sem merge.
 - CI dos commits mais recentes, incluindo o webhook que acorda a inbox para mensagens só com multimédia: testes e build concluídos com sucesso. O isolamento do contexto por número de telefone foi acrescentado posteriormente e está a ser validado no CI.
 - O frontend não foi publicado. As três Edge Functions e as migrations indicadas acima foram aplicadas no projeto Supabase.
+
+
+### Aprovação e resposta pós-execução
+As propostas MCP originadas numa mensagem WhatsApp preservam a origem e o identificador da conversa. Depois da aprovação humana e execução da ferramenta, o resumo do resultado volta a usar o cérebro configurado exclusivamente para WhatsApp (em vez do cérebro global) e recebe apenas o histórico daquele cliente/canal. Propostas adicionais continuam pendentes de aprovação; nenhuma ação subsequente é executada automaticamente.
