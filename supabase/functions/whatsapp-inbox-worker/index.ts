@@ -34,29 +34,31 @@ function constantTimeEqual(a: string, b: string) {
   return diff === 0;
 }
 
-function brainConfig() {
-  const provider = (Deno.env.get("CACADOR_WHATSAPP_BRAIN_PROVIDER") || "zrouter").trim().toLowerCase();
-  if (provider === "zrouter") {
-    const apiKey = Deno.env.get("ZROUTER_API_KEY");
-    if (!apiKey) throw new Error("ZROUTER_API_KEY is missing");
-    return { apiKey, endpoint: "https://www.zrouter.com/v1/chat/completions", model: Deno.env.get("ZROUTER_MODEL") || "openrouter/baidu/ernie-5.5-flash-preview:free" };
+type ChannelConfig = {
+  id: string; owner_id: string; phone_number_id: string;
+  brain_provider: "zrouter" | "lovable" | "openai-compatible";
+  brain_model: string | null; brain_base_url: string | null;
+};
+
+async function brainConfig(admin: ReturnType<typeof createClient>, channel: ChannelConfig) {
+  const { data: apiKey, error } = await admin.rpc("get_whatsapp_business_channel_secret", {
+    p_channel_id: channel.id, p_secret_kind: "brain_api_key",
+  });
+  if (error || typeof apiKey !== "string" || apiKey.length < 12) throw new Error("Channel WhatsApp brain credential is unavailable");
+  if (channel.brain_provider === "zrouter") {
+    return { apiKey, endpoint: "https://www.zrouter.com/v1/chat/completions", model: channel.brain_model || "openrouter/baidu/ernie-5.5-flash-preview:free" };
   }
-  if (provider === "lovable") {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    const model = Deno.env.get("CACADOR_WHATSAPP_LOVABLE_MODEL");
-    if (!apiKey || !model) throw new Error("Lovable WhatsApp brain credentials/model are missing");
-    return { apiKey, endpoint: "https://ai.gateway.lovable.dev/v1/chat/completions", model };
+  if (channel.brain_provider === "lovable") {
+    if (!channel.brain_model) throw new Error("Lovable channel model is missing");
+    return { apiKey, endpoint: "https://ai.gateway.lovable.dev/v1/chat/completions", model: channel.brain_model };
   }
-  if (provider === "openai-compatible") {
-    const apiKey = Deno.env.get("CACADOR_WHATSAPP_BRAIN_API_KEY");
-    const baseUrl = Deno.env.get("CACADOR_WHATSAPP_BRAIN_BASE_URL");
-    const model = Deno.env.get("CACADOR_WHATSAPP_BRAIN_MODEL");
-    if (!apiKey || !baseUrl || !model) throw new Error("OpenAI-compatible WhatsApp brain configuration is incomplete");
-    const url = new URL(baseUrl);
-    if (url.protocol !== "https:") throw new Error("WhatsApp brain endpoint must use HTTPS");
-    return { apiKey, endpoint: url.toString().replace(/\/$/, "") + "/chat/completions", model };
+  if (channel.brain_provider === "openai-compatible") {
+    if (!channel.brain_base_url || !channel.brain_model) throw new Error("OpenAI-compatible channel configuration is incomplete");
+    const endpoint = new URL(channel.brain_base_url);
+    if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password) throw new Error("WhatsApp brain endpoint must be HTTPS without embedded credentials");
+    return { apiKey, endpoint: endpoint.toString().replace(/\/$/, "") + "/chat/completions", model: channel.brain_model };
   }
-  throw new Error("Unsupported CACADOR_WHATSAPP_BRAIN_PROVIDER");
+  throw new Error("Unsupported WhatsApp channel brain provider");
 }
 
 type McpServerConfig = { id: string; name: string; url: string; tokenEnv?: string; allowedTools: string[] };
@@ -223,71 +225,87 @@ Deno.serve(async (request: Request) => {
 
   const url = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
-  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
-  if (!url || !serviceKey || !ownerId || !phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) {
-    return json({ error: "Worker owner/Business channel is not configured" }, 503);
-  }
+  if (!url || !serviceKey) return json({ error: "Worker service credentials are not configured" }, 503);
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: claimed, error: claimError } = await admin.rpc("claim_whatsapp_inbox_messages_for_worker", {
-    p_owner_id: ownerId, p_phone_number_id: phoneNumberId, p_limit: 10,
-  });
-  if (claimError) {
-    console.error("[whatsapp-inbox-worker] claim failed", claimError.message);
-    return json({ error: "Could not claim inbox messages" }, 503);
+  const { data: channels, error: channelsError } = await admin.from("whatsapp_business_channels")
+    .select("id,owner_id,phone_number_id,brain_provider,brain_model,brain_base_url")
+    .eq("status", "active").order("created_at", { ascending: true }).limit(100);
+  if (channelsError) {
+    console.error("[whatsapp-inbox-worker] channel lookup failed", channelsError.message);
+    return json({ error: "Could not load active WhatsApp channels" }, 503);
   }
 
-  let processed = 0;
-  let retried = 0;
-  let unsupported = 0;
-  for (const row of (claimed || []) as InboxRow[]) {
-    try {
-      const incoming = row.text_body?.trim();
-      if (!incoming) {
-        const { error } = await admin.from("whatsapp_inbox_messages").update({
-          processing_status: "unsupported", processed_at: new Date().toISOString(), locked_at: null,
-          last_error: "Autonomous worker currently processes text messages only; media remains safely stored.", updated_at: new Date().toISOString(),
-        }).eq("id", row.id).eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("processing_status", "processing").eq("processing_claim_token", row.processing_claim_token);
-        if (error) throw error;
-        unsupported++;
-        continue;
-      }
+  let claimedTotal = 0, processed = 0, retried = 0, unsupported = 0, channelErrors = 0;
+  for (const channel of (channels || []) as ChannelConfig[]) {
+    if (!channel.id || !channel.owner_id || !/^\\d{5,30}$/.test(channel.phone_number_id)) continue;
+    let brain: { apiKey: string; endpoint: string; model: string };
+    try { brain = await brainConfig(admin, channel); }
+    catch (error) {
+      channelErrors++;
+      console.error("[whatsapp-inbox-worker] channel brain unavailable", channel.id, error instanceof Error ? error.message : "unknown");
+      continue;
+    }
 
-      const { data: history, error: historyError } = await admin.from("whatsapp_inbox_messages")
-        .select("message_type,text_body,assistant_draft,received_at")
-        .eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("from_phone", row.from_phone)
-        .lt("received_at", row.received_at).not("text_body", "is", null)
-        .order("received_at", { ascending: false }).limit(8);
-      if (historyError) throw historyError;
-      const context = (history || []).reverse().flatMap(item => [
-        ...(item.text_body ? ["Cliente: " + String(item.text_body).slice(0, 4000)] : []),
-        ...(item.assistant_draft ? ["Caçador (rascunho anterior, ainda não enviado): " + String(item.assistant_draft).slice(0, 4000)] : []),
-      ]).join("\\n");
-      const result = await prepareDraft(incoming, context, row.from_phone);
-      const { error: saveError } = await admin.from("whatsapp_inbox_messages").update({
-        assistant_draft: result.answer || null,
-        assistant_proposals: result.proposals,
-        draft_status: "pending_approval",
-        processing_status: "processed",
-        processed_at: new Date().toISOString(), locked_at: null, last_error: null,
-        updated_at: new Date().toISOString(),
-      }).eq("id", row.id).eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("processing_status", "processing").eq("processing_claim_token", row.processing_claim_token);
-      if (saveError) throw saveError;
-      processed++;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown worker error";
-      const attempts = row.attempt_count || 1;
-      const terminal = attempts >= 8;
-      const delaySeconds = Math.min(3600, 5 * (2 ** Math.min(attempts, 10)));
-      await admin.from("whatsapp_inbox_messages").update({
-        processing_status: terminal ? "failed" : "pending",
-        next_attempt_at: terminal ? undefined : new Date(Date.now() + delaySeconds * 1000).toISOString(),
-        locked_at: null, last_error: message.slice(0, 1000), updated_at: new Date().toISOString(),
-      }).eq("id", row.id).eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("processing_status", "processing");
-      retried++;
-      console.error("[whatsapp-inbox-worker] message processing failed", row.message_id, message);
+    const { data: claimed, error: claimError } = await admin.rpc("claim_whatsapp_inbox_messages_for_worker", {
+      p_owner_id: channel.owner_id, p_phone_number_id: channel.phone_number_id, p_limit: 10,
+    });
+    if (claimError) {
+      channelErrors++;
+      console.error("[whatsapp-inbox-worker] channel claim failed", channel.id, claimError.message);
+      continue;
+    }
+    claimedTotal += (claimed || []).length;
+
+    for (const row of (claimed || []) as InboxRow[]) {
+      try {
+        const incoming = row.text_body?.trim();
+        if (!incoming) {
+          const { error } = await admin.from("whatsapp_inbox_messages").update({
+            processing_status: "unsupported", processed_at: new Date().toISOString(), locked_at: null,
+            last_error: "Autonomous worker currently processes text messages only; media remains safely stored.",
+            updated_at: new Date().toISOString(),
+          }).eq("id", row.id).eq("owner_id", channel.owner_id).eq("phone_number_id", channel.phone_number_id)
+            .eq("processing_status", "processing").eq("processing_claim_token", row.processing_claim_token);
+          if (error) throw error;
+          unsupported++;
+          continue;
+        }
+
+        const { data: history, error: historyError } = await admin.from("whatsapp_inbox_messages")
+          .select("message_type,text_body,assistant_draft,received_at")
+          .eq("owner_id", channel.owner_id).eq("phone_number_id", channel.phone_number_id).eq("from_phone", row.from_phone)
+          .lt("received_at", row.received_at).not("text_body", "is", null)
+          .order("received_at", { ascending: false }).limit(8);
+        if (historyError) throw historyError;
+        const context = (history || []).reverse().flatMap(item => [
+          ...(item.text_body ? ["Cliente: " + String(item.text_body).slice(0, 4000)] : []),
+          ...(item.assistant_draft ? ["Caçador (rascunho anterior, ainda não enviado): " + String(item.assistant_draft).slice(0, 4000)] : []),
+        ]).join("\\n");
+        const result = await prepareDraft(incoming, context, row.from_phone, brain);
+        const { error: saveError } = await admin.from("whatsapp_inbox_messages").update({
+          assistant_draft: result.answer || null, assistant_proposals: result.proposals,
+          draft_status: "pending_approval", processing_status: "processed",
+          processed_at: new Date().toISOString(), locked_at: null, last_error: null,
+          updated_at: new Date().toISOString(),
+        }).eq("id", row.id).eq("owner_id", channel.owner_id).eq("phone_number_id", channel.phone_number_id)
+          .eq("processing_status", "processing").eq("processing_claim_token", row.processing_claim_token);
+        if (saveError) throw saveError;
+        processed++;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown worker error";
+        const attempts = row.attempt_count || 1, terminal = attempts >= 8;
+        const delaySeconds = Math.min(3600, 5 * (2 ** Math.min(attempts, 10)));
+        await admin.from("whatsapp_inbox_messages").update({
+          processing_status: terminal ? "failed" : "pending",
+          next_attempt_at: terminal ? undefined : new Date(Date.now() + delaySeconds * 1000).toISOString(),
+          locked_at: null, last_error: message.slice(0, 1000), updated_at: new Date().toISOString(),
+        }).eq("id", row.id).eq("owner_id", channel.owner_id).eq("phone_number_id", channel.phone_number_id)
+          .eq("processing_status", "processing").eq("processing_claim_token", row.processing_claim_token);
+        retried++;
+        console.error("[whatsapp-inbox-worker] message processing failed", row.message_id, message);
+      }
     }
   }
-  return json({ claimed: (claimed || []).length, processed, retried, unsupported });
+  return json({ channels: (channels || []).length, claimed: claimedTotal, processed, retried, unsupported, channel_errors: channelErrors });
 });
