@@ -116,6 +116,7 @@ O cliente MCP do Caçador inclui agora um servidor integrado identificado como `
 - `get_connection_status`: verifica a presença das configurações sem expor credenciais.
 - `send_text_message`: envia uma mensagem individual pela WhatsApp Cloud API. A interface exige confirmação humana antes da execução.
 - `send_audio_message`: converte texto em voz com o fornecedor TTS configurado, carrega o áudio na Meta e envia-o como mensagem de voz; também exige confirmação humana.
+- `send_template_message`: envia templates previamente aprovados pela Meta, com variáveis ordenadas, para iniciar conversas fora da janela de 24 horas; também exige confirmação humana.
 
 ### Secrets do servidor da aplicação
 
@@ -210,6 +211,7 @@ Na branch atual da PR #19 foi acrescentado o encaminhamento de mensagens recebid
 - Não existe ainda worker autónomo de backend para gerar respostas com o painel fechado.
 - O fluxo de áudio de chamadas usa deteção de atividade de voz e segmentos STT/TTS; não deve ser descrito como full-duplex de baixa latência.
 - O envio de mensagens de voz está implementado no provider MCP, mas depende de `CACADOR_AUDIO_API_KEY`, do serviço TTS e da aceitação do formato `audio/mpeg` pela Meta.
+- O envio de templates aprovados está disponível para prospeção e para iniciar conversas; os templates têm de ser previamente criados/aprovados no WhatsApp Manager e respeitar consentimento e regras de marketing.
 - A chamada de permissão pode usar template aprovado fora da janela de atendimento, desde que sejam configuradas `WHATSAPP_CALL_PERMISSION_TEMPLATE_NAME` e `WHATSAPP_CALL_PERMISSION_TEMPLATE_LANGUAGE` no servidor.
 - O WebRTC usa STUN público; TURN e teste real entre dois números elegíveis continuam pendentes.
 - A validação CI do commit `b2008d3` passou 7/7 ficheiros de testes e builds Vite/Nitro/Cloudflare; os commits posteriores de áudio, seleção de clientes, templates e VAD ainda precisam de CI verde.
