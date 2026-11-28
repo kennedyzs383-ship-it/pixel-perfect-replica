@@ -11,8 +11,13 @@ const json = (body: unknown, status = 200) =>
 
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  const requestLength = Number(request.headers.get("content-length") ?? 0);
-  if (requestLength > 16 * 1024) return json({ error: "Request body is too large." }, 413);
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader !== null) {
+    const requestLength = Number(contentLengthHeader);
+    if (!Number.isSafeInteger(requestLength) || requestLength < 0 || requestLength > 16 * 1024) {
+      return json({ error: "Request body is too large or has an invalid length." }, 413);
+    }
+  }
 
   const authorization = request.headers.get("authorization") ?? "";
   const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
@@ -43,10 +48,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
   let mediaId: string;
   let messageId: string;
   try {
-    const body = await request.json();
+    // Enforce the limit even when a client omits Content-Length (for example, chunked requests).
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 16 * 1024) {
+      return json({ error: "Request body is too large." }, 413);
+    }
+    const body: unknown = JSON.parse(rawBody);
     if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Invalid request body." }, 400);
-    mediaId = typeof body.media_id === "string" ? body.media_id : "";
-    messageId = typeof body.message_id === "string" ? body.message_id : "";
+    const payload = body as Record<string, unknown>;
+    mediaId = typeof payload.media_id === "string" ? payload.media_id : "";
+    messageId = typeof payload.message_id === "string" ? payload.message_id : "";
   } catch {
     return json({ error: "Invalid JSON." }, 400);
   }
