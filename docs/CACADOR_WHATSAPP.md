@@ -10,7 +10,7 @@ Esta entrega limita-se às operações WhatsApp do Caçador. Não altera o núme
 - Webhook Meta com verificação HMAC-SHA256 e verificação inicial por token.
 - Inbox persistente no Supabase, deduplicada por proprietário e ID da mensagem.
 - RPCs atómicos para reclamar, concluir, repetir e marcar como não suportadas mensagens.
-- Recuperação das mensagens quando o painel autenticado está aberto.
+- Recuperação das mensagens pendentes a cada 15 segundos enquanto o painel autenticado está aberto; o webhook persiste as mensagens mesmo quando o painel está fechado.
 - Seleção de números de clientes que já enviaram mensagens para o número ligado, diretamente no painel de chamadas.
 - Ferramentas MCP para enviar texto, templates aprovados e mensagens de voz geradas por TTS. A interface exige aprovação humana antes de executar ações de envio.
 - Templates aprovados podem iniciar conversas fora da janela de 24 horas, sujeitos às regras e ao consentimento da Meta.
@@ -29,7 +29,7 @@ Esta entrega limita-se às operações WhatsApp do Caçador. Não altera o núme
 ### Multimédia recebida
 - A Edge Function `whatsapp-media` valida sessão, proprietário, mensagem e media ID antes de descarregar.
 - Só aceita hosts Meta autorizados, HTTPS, MIME allowlist e ficheiros até 20 MB.
-- A recuperação segura está publicada, mas a transcrição automática de áudios recebidos e a análise de imagens/documentos ainda não estão ligadas ao fluxo da inbox.
+- O fluxo da inbox descarrega e transcreve automaticamente os formatos de áudio suportados através do serviço STT configurado e extrai documentos `text/plain`. Imagens, PDFs, vídeos e outros formatos ainda não têm interpretador ligado; são guardados e marcados como não suportados, sem serem apresentados como processados.
 
 ## Estado no Supabase
 
@@ -89,5 +89,5 @@ O número de origem tem de ser elegível para Calling e estar registado na Cloud
 - PR: [#19 — feat/cacador-whatsapp-dual-channel](https://github.com/kennedyzs383-ship-it/pixel-perfect-replica/pull/19)
 - Branch: `feat/cacador-whatsapp-dual-channel`
 - A PR permanece em draft, aberta e sem merge.
-- CI do commit `80752122`: 7/7 ficheiros de testes, 41/41 testes e builds Vite/Nitro/Cloudflare concluídos com sucesso.
+- CI do commit `e925b825`: 7/7 ficheiros de testes, 44/44 testes e builds Vite/Nitro/Cloudflare concluídos com sucesso. A alteração posterior de robustez da inbox aguarda a execução do CI.
 - O frontend não foi publicado. As três Edge Functions e as migrations indicadas acima foram aplicadas no projeto Supabase.
