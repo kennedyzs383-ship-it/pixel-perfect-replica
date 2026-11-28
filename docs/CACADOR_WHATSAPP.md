@@ -151,3 +151,8 @@ Para o worker propor ferramentas dos outros servidores MCP configurados no Caça
 
 
 O painel também permite rejeitar explicitamente uma proposta recuperada da inbox. A rejeição é persistida com a RPC autenticada e remove a proposta da fila de aprovação; não executa qualquer ferramenta nem envia mensagem.
+
+
+### Concorrência e fencing de workers
+
+Cada reclamação autónoma recebe `processing_claim_token` (UUID) novo, gerado atomicamente pela RPC `claim_whatsapp_inbox_messages_for_worker`. Todas as gravações de conclusão, estado não suportado e retry do worker incluem simultaneamente `id`, `owner_id`, `phone_number_id`, `processing_status='processing'` e o token da reclamação. Se uma execução antiga ultrapassar o lease de cinco minutos e outra execução reclamar a mensagem, o token antigo deixa de corresponder e a execução atrasada não pode sobrescrever o estado novo. O token não é credencial de utilizador e nunca é exposto no frontend.
