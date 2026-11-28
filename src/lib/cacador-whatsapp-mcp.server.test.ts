@@ -100,3 +100,39 @@ describe('WhatsApp voice messages', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('WhatsApp call permission requests', () => {
+  it('uses the approved call-permission template when configured', async () => {
+    vi.stubEnv('WHATSAPP_CALL_PERMISSION_TEMPLATE_NAME', 'cacador_call_permission');
+    vi.stubEnv('WHATSAPP_CALL_PERMISSION_TEMPLATE_LANGUAGE', 'pt_PT');
+    fetchMock.mockResolvedValueOnce(Response.json({ messages: [{ id: 'wamid-permission-1' }] }));
+
+    const result = await callWhatsAppMcpTool('request_call_permission', {
+      to: '+244923000000',
+      message: 'Pedido de autorização.',
+    });
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(payload).toMatchObject({
+      type: 'template',
+      template: { name: 'cacador_call_permission', language: { code: 'pt_PT' } },
+    });
+    expect(result.content).toContain('wamid-permission-1');
+  });
+
+  it('uses an interactive request when no approved template is configured', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ messages: [{ id: 'wamid-permission-2' }] }));
+
+    await callWhatsAppMcpTool('request_call_permission', {
+      to: '+244923000000',
+      message: 'Podemos ligar-te?',
+    });
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(payload).toMatchObject({
+      type: 'interactive',
+      interactive: { type: 'call_permission_request', action: { name: 'call_permission_request' } },
+    });
+  });
+});
