@@ -76,7 +76,7 @@ O número de origem tem de ser elegível para Calling e estar registado na Cloud
 ## Limitações operacionais
 
 - Os números apresentados no painel são números de clientes que já enviaram mensagens para a inbox. A Cloud API não dá acesso automático à lista privada de contactos do telemóvel.
-- A inbox persiste mesmo com o painel fechado, mas a geração de respostas conversacionais continua dependente do painel autenticado estar aberto.
+- A inbox persiste mesmo com o painel fechado, mas a geração de respostas conversacionais continua dependente do painel autenticado estar aberto. O contexto enviado ao cérebro é isolado por número de telefone: mensagens de outros clientes e conversas locais não entram no contexto deste cliente.
 - Mensagens iniciadas pela empresa e chamadas estão sujeitas às regras de consentimento, templates, limites e preços da Meta.
 - A inbox WhatsApp possui agora seleção de cérebro isolada da IA global. O proprietário escolhe no servidor através de `CACADOR_WHATSAPP_BRAIN_PROVIDER`: `zrouter` (predefinido), `lovable` ou `openai-compatible`. A IA global da aplicação continua independente e não é alterada por esta configuração.
 - Para `lovable`, configurar `LOVABLE_API_KEY` e `CACADOR_WHATSAPP_LOVABLE_MODEL`; o endpoint é o Lovable AI Gateway. Para `openai-compatible`, configurar `CACADOR_WHATSAPP_BRAIN_API_KEY`, `CACADOR_WHATSAPP_BRAIN_BASE_URL` (base HTTPS, sem `/chat/completions`) e `CACADOR_WHATSAPP_BRAIN_MODEL`. Para `zrouter`, são usadas `ZROUTER_API_KEY` e `ZROUTER_MODEL` (ou o modelo predefinido). Todas as chaves ficam apenas nas secrets do servidor.
@@ -89,5 +89,5 @@ O número de origem tem de ser elegível para Calling e estar registado na Cloud
 - PR: [#19 — feat/cacador-whatsapp-dual-channel](https://github.com/kennedyzs383-ship-it/pixel-perfect-replica/pull/19)
 - Branch: `feat/cacador-whatsapp-dual-channel`
 - A PR permanece em draft, aberta e sem merge.
-- CI do commit `e925b825`: 7/7 ficheiros de testes, 44/44 testes e builds Vite/Nitro/Cloudflare concluídos com sucesso. A alteração posterior de robustez da inbox aguarda a execução do CI.
+- CI dos commits mais recentes, incluindo o webhook que acorda a inbox para mensagens só com multimédia: testes e build concluídos com sucesso. O isolamento do contexto por número de telefone foi acrescentado posteriormente e está a ser validado no CI.
 - O frontend não foi publicado. As três Edge Functions e as migrations indicadas acima foram aplicadas no projeto Supabase.
