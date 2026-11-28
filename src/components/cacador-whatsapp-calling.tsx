@@ -193,11 +193,11 @@ export function CacadorWhatsAppCalling() {
     streamRef.current = stream;
     const peer = new RTCPeerConnection({ iceServers });
     peerRef.current = peer;
-    const audioContext = new AudioContext();
+    const audioContext = audioContextRef.current ?? new AudioContext();
     audioContextRef.current = audioContext;
     // Resume while the call button's user gesture is still active, so the
     // microphone mix is live before Meta completes SDP negotiation.
-    await audioContext.resume();
+    if (audioContext.state === "suspended") await audioContext.resume();
     const speechDestination = audioContext.createMediaStreamDestination();
     speechDestinationRef.current = speechDestination;
     // Mix microphone and synthesized speech into one outbound audio track.
@@ -440,6 +440,9 @@ export function CacadorWhatsAppCalling() {
       if (!userId) throw new Error("Inicia sessão no Caçador.");
       if (!realtimeReady) throw new Error("O canal seguro de sinalização ainda não está ligado. Aguarda antes de iniciar a chamada.");
       if (!/^\+?[1-9]\d{7,14}$/.test(phone.trim())) throw new Error("Indica o número do cliente com indicativo internacional.");
+      // Prime the browser audio context directly in the click gesture, before network checks.
+      audioContextRef.current = new AudioContext();
+      void audioContextRef.current.resume();
       // Check consent before opening the microphone or creating a WebRTC offer.
       const permission = await callControl({ action: "get_call_permission_status", to: phone.trim() });
       const canStartCall = Array.isArray(permission.actions) &&
@@ -471,6 +474,9 @@ export function CacadorWhatsAppCalling() {
     if (!incoming?.id || !incoming.session?.sdp) return;
     setBusy(true);
     try {
+      // Unlock audio in the user's answer gesture before asynchronous ICE setup.
+      audioContextRef.current = new AudioContext();
+      void audioContextRef.current.resume();
       const iceServers = await getIceServers();
       const peer = await createPeer(iceServers);
       await peer.setRemoteDescription({ type: "offer", sdp: incoming.session.sdp });
