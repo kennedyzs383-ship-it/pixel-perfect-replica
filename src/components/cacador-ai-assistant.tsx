@@ -11,7 +11,7 @@ import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, ExternalLink, WandS
 
 type ChatLine = { role: "user" | "assistant"; text: string; sender?: string; conversationId?: string };
 type IncomingWhatsAppMessage = { message_id: string; from: string; text: string; contact_name?: string | null; phone_number_id?: string };
-type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown>; origin?: "whatsapp"; conversationId?: string };
+type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown>; origin?: "whatsapp"; conversationId?: string; inboxMessageId?: string };
 const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
 async function whatsappMediaBlob(mediaId: string, messageId: string): Promise<Blob> {
   const { data, error } = await supabase.functions.invoke("whatsapp-media", {
@@ -252,6 +252,44 @@ export function CacadorAIAssistant() {
 
     void supabase.auth.getUser().then(async ({ data, error }) => {
       if (!active || error || !data.user) return;
+
+      // Restore drafts prepared by the background worker while the dashboard was closed.
+      // RLS plus the explicit owner filter prevent another owner's drafts from appearing.
+      const { data: pendingDrafts, error: draftsError } = await supabase
+        .from("whatsapp_inbox_messages")
+        .select("id,message_id,from_phone,contact_name,text_body,assistant_draft,assistant_proposals,phone_number_id,received_at")
+        .eq("owner_id", data.user.id)
+        .eq("draft_status", "pending_approval")
+        .order("received_at", { ascending: true })
+        .limit(30);
+      if (draftsError) {
+        if (active) setAiError("Não foi possível recuperar as propostas WhatsApp pendentes.");
+      } else if (active) {
+        for (const draft of pendingDrafts ?? []) {
+          const conversationId = "whatsapp:" + draft.phone_number_id + ":" + draft.from_phone;
+          const sender = draft.contact_name?.trim() || "+" + draft.from_phone;
+          const lines: ChatLine[] = [];
+          if (draft.text_body?.trim()) lines.push({
+            role: "user", sender: "WhatsApp · " + sender, conversationId, text: draft.text_body.trim(),
+          });
+          if (draft.assistant_draft?.trim()) lines.push({
+            role: "assistant", conversationId, text: "[Rascunho para revisão — ainda não enviado]: " + draft.assistant_draft.trim(),
+          });
+          if (lines.length) setMessages(previous => [...previous, ...lines].slice(-100));
+          const storedProposals = Array.isArray(draft.assistant_proposals) ? draft.assistant_proposals : [];
+          const restored = storedProposals.flatMap(item => {
+            if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+            const proposal = item as unknown as McpProposal;
+            if (typeof proposal.id !== "string" || typeof proposal.serverId !== "string" ||
+                typeof proposal.toolName !== "string" || !proposal.arguments || typeof proposal.arguments !== "object") return [];
+            return [{ ...proposal, origin: "whatsapp" as const, conversationId, inboxMessageId: draft.id }];
+          });
+          if (restored.length) setMcpProposals(previous => [
+            ...previous.filter(item => item.inboxMessageId !== draft.id), ...restored,
+          ]);
+        }
+      }
+
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session?.access_token) await supabase.realtime.setAuth(sessionData.session.access_token);
       if (!active) return;
@@ -332,9 +370,20 @@ export function CacadorAIAssistant() {
     if (!window.confirm("Autorizar " + proposal.toolName + " no servidor " + proposal.serverName + "? Revê os argumentos antes de continuar.")) return;
     setBusy(true);
     setAiError("");
+    let approvalPersisted = false;
+    let toolExecuted = false;
     try {
+      if (proposal.inboxMessageId) {
+        const { data: acknowledged, error: approvalError } = await supabase.rpc("set_whatsapp_inbox_draft_status", {
+          p_id: proposal.inboxMessageId, p_status: "approved",
+        });
+        if (approvalError || !acknowledged) throw approvalError || new Error("A proposta já não está pendente ou não pertence a esta conta.");
+        approvalPersisted = true;
+      }
       const result = await executeCacadorMcpTool({ data: { serverId: proposal.serverId, toolName: proposal.toolName, arguments: proposal.arguments } });
-      const toolOutput = result.content || (result.isError ? "A ferramenta devolveu um erro." : JSON.stringify(result));
+      if (result.isError) throw new Error(result.content || "A ferramenta devolveu um erro.");
+      toolExecuted = true;
+      const toolOutput = result.content || JSON.stringify(result);
       setMcpProposals(current => current.filter(item => item.id !== proposal.id));
       const summaryContext = (proposal.origin === "whatsapp" && proposal.conversationId
         ? messagesRef.current.filter(line => line.conversationId === proposal.conversationId).slice(-8)
@@ -367,6 +416,13 @@ export function CacadorAIAssistant() {
         speak(summary.answer);
       }
     } catch (error) {
+      // Re-open a proposal only when execution definitely did not complete. If execution
+      // succeeded but a later summary failed, keep it acknowledged to prevent duplicate sends.
+      if (approvalPersisted && !toolExecuted && proposal.inboxMessageId) {
+        await supabase.rpc("set_whatsapp_inbox_draft_status", {
+          p_id: proposal.inboxMessageId, p_status: "pending_approval",
+        });
+      }
       setAiError(error instanceof Error ? error.message : "Não foi possível executar ou interpretar o resultado MCP.");
     } finally { setBusy(false); }
   };
