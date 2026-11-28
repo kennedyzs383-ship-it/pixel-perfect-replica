@@ -38,7 +38,7 @@ function brainConfig() {
   if (provider === "zrouter") {
     const apiKey = Deno.env.get("ZROUTER_API_KEY");
     if (!apiKey) throw new Error("ZROUTER_API_KEY is missing");
-    return { apiKey, endpoint: "https://www.zrouter.com/v1/chat/completions", model: Deno.env.get("ZROUTER_MODEL") || "openai/gpt-4o-mini" };
+    return { apiKey, endpoint: "https://www.zrouter.com/v1/chat/completions", model: Deno.env.get("ZROUTER_MODEL") || "openrouter/baidu/ernie-5.5-flash-preview:free" };
   }
   if (provider === "lovable") {
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -161,12 +161,15 @@ Deno.serve(async (request: Request) => {
       }
 
       const { data: history, error: historyError } = await admin.from("whatsapp_inbox_messages")
-        .select("message_type,text_body,received_at")
+        .select("message_type,text_body,assistant_draft,received_at")
         .eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("from_phone", row.from_phone)
         .lt("received_at", row.received_at).not("text_body", "is", null)
         .order("received_at", { ascending: false }).limit(8);
       if (historyError) throw historyError;
-      const context = (history || []).reverse().map(item => "Cliente: " + String(item.text_body || "").slice(0, 4000)).join("\\n");
+      const context = (history || []).reverse().flatMap(item => [
+        ...(item.text_body ? ["Cliente: " + String(item.text_body).slice(0, 4000)] : []),
+        ...(item.assistant_draft ? ["Caçador (rascunho anterior, ainda não enviado): " + String(item.assistant_draft).slice(0, 4000)] : []),
+      ]).join("\\n");
       const result = await prepareDraft(incoming, context, row.from_phone);
       const { error: saveError } = await admin.from("whatsapp_inbox_messages").update({
         assistant_draft: result.answer || null,
