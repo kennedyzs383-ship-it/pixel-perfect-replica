@@ -51,7 +51,7 @@ create index if not exists whatsapp_business_channels_active_phone_idx
   where status = 'active';
 
 alter table public.whatsapp_business_channels enable row level security;
-revoke all on public.whatsapp_business_channels from public, anon;
+revoke all on public.whatsapp_business_channels from public, anon, authenticated;
 grant select, insert, update on public.whatsapp_business_channels to authenticated;
 grant all on public.whatsapp_business_channels to service_role;
 
