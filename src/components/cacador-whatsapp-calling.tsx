@@ -195,6 +195,9 @@ export function CacadorWhatsAppCalling() {
     peerRef.current = peer;
     const audioContext = new AudioContext();
     audioContextRef.current = audioContext;
+    // Resume while the call button's user gesture is still active, so the
+    // microphone mix is live before Meta completes SDP negotiation.
+    await audioContext.resume();
     const speechDestination = audioContext.createMediaStreamDestination();
     speechDestinationRef.current = speechDestination;
     // Mix microphone and synthesized speech into one outbound audio track.
