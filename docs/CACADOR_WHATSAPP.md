@@ -14,7 +14,7 @@ Não migrar, eliminar, desregistar nem alterar o número atual sem confirmação
 - Foi criada a página de preparação em `/cacador/whatsapp`.
 - Os dois canais aparecem separadamente como **Por ligar**.
 - A página não pede tokens, não envia mensagens e não afirma que qualquer número esteja ligado.
-- OAuth/Embedded Signup, endpoints de webhook, persistência de tokens e chamadas ainda não foram implementados.
+- Embedded Signup/OAuth e gestão isolada de credenciais por canal ainda não estão concluídos. O webhook, a inbox persistente e a sinalização de chamadas estão implementados na branch; a ativação Meta e os testes reais continuam pendentes.
 - É necessário um URL público HTTPS estável antes de registar o callback e o webhook na Meta.
 
 ## Arquitetura pretendida
@@ -95,7 +95,7 @@ Foi adicionada a Edge Function `whatsapp-webhook` em `supabase/functions/whatsap
 - POST: valida `X-Hub-Signature-256` com HMAC-SHA256 e `META_APP_SECRET`, rejeitando assinaturas inválidas.
 - O corpo é lido como texto bruto antes da validação da assinatura.
 - Não regista conteúdo de mensagens nem segredos nos logs.
-- Por enquanto, apenas confirma a receção de eventos válidos. A persistência, deduplicação e processamento de mensagens continuam desativados até existir um modelo de dados com isolamento por proprietário e política de retenção aprovada.
+- Para eventos `messages`, o webhook valida a assinatura e o `phone_number_id`, persiste a mensagem na inbox com deduplicação por proprietário/ID e publica eventos de chamada em canal privado. A interpretação conversacional ocorre quando o painel autenticado recupera a inbox.
 
 ### Segredos necessários no projeto Supabase O-CAÇADOR
 
@@ -128,11 +128,11 @@ A ferramenta de envio só fica funcional quando estas três variáveis estiverem
 
 ### Limites desta etapa
 
-- Esta integração MCP permite consultar configuração e enviar texto; ainda não processa mensagens recebidas no cérebro.
-- O webhook atual apenas valida a assinatura e confirma a receção; não persiste nem encaminha mensagens.
+- A MCP permite consultar a configuração e enviar texto. As mensagens recebidas são persistidas pelo webhook e encaminhadas ao Z Router pelo painel do Caçador quando este está aberto.
+- O webhook valida a assinatura e persiste mensagens na inbox. O processamento conversacional não é um worker autónomo: depende do painel autenticado estar aberto para recuperar e encaminhar a mensagem ao Z Router.
 - O envio está sujeito à janela de atendimento, consentimento, templates e políticas/preços Meta.
 - O token configurado é uma credencial de servidor única nesta primeira etapa; antes de oferecer o Caçador a vários utilizadores, será necessário onboarding por utilizador e armazenamento cifrado isolado.
-- Não há integração de chamadas nesta etapa.
+- O controlo Calling e o painel WebRTC estão na branch, mas a chamada real continua dependente de elegibilidade, configuração Meta, TURN quando necessário e teste ponta a ponta.
 
 
 ## Calling API adicionada ao MCP
@@ -193,9 +193,21 @@ Na branch atual da PR #19 foi acrescentado o encaminhamento de mensagens recebid
 
 ### Limitações ainda abertas
 
-- O encaminhamento atual usa Supabase Realtime broadcast; não existe ainda uma inbox persistente. Se o painel do Caçador estiver desligado/desconectado, a mensagem pode não chegar à interface.
-- A deduplicação de IDs recebidos existe apenas em memória no navegador. Ainda falta deduplicação persistente no servidor para retries da Meta.
-- Nesta etapa são tratados texto e respostas interativas com texto. Transferência/download de áudio, imagem, vídeo e documentos e respetiva interpretação ainda não estão implementados.
+- Existe uma inbox persistente com deduplicação no servidor e recuperação quando o painel autenticado volta a abrir. Ainda não existe um worker autónomo que gere respostas enquanto o painel está fechado.
+- A deduplicação persistente usa a chave `(owner_id, message_id)`; o conjunto em memória no navegador serve apenas para evitar duplicação visual durante a sessão.
+- Texto e respostas interativas com texto são encaminhados ao Z Router. Áudio, imagem, vídeo e documentos são guardados com metadados, mas ainda não são descarregados nem interpretados. Agora ficam marcados como `unsupported`, não como processados.
 - A Edge Function alterada está versionada nesta branch, mas esta alteração ainda não foi publicada no Supabase. A versão ativa não deve ser considerada atualizada até um deploy autorizado.
 - As respostas são preparadas pelo Z Router, mas não são enviadas automaticamente. A confirmação humana continua obrigatória.
-- Testes automatizados e build desta alteração ainda precisam de ser executados; não há resultado de CI confirmado para este commit.
+- O commit anterior da branch passou 36 testes e o build Vite/Nitro/Cloudflare. As alterações mais recentes estão a aguardar a conclusão do CI da PR.
+
+
+## Estado técnico atualizado — 28-11-2026
+
+- A inbox persistente e os RPCs de claim/complete/retry estão presentes na branch e a migration base foi aplicada anteriormente no projeto Supabase.
+- A migration `20261128000200_whatsapp_inbox_unsupported_media.sql` acrescenta o estado terminal `unsupported` e o RPC `skip_whatsapp_inbox_message`. Esta migration está apenas na branch; não foi aplicada ao Supabase.
+- O painel já não marca multimédia não interpretada como concluída com sucesso. A mensagem fica identificada como não suportada, com motivo explícito.
+- Não existe ainda worker autónomo de backend para gerar respostas com o painel fechado.
+- O fluxo de áudio de chamadas usa segmentos STT/TTS; não deve ser descrito como full-duplex de baixa latência.
+- O WebRTC usa STUN público; TURN e teste real entre dois números elegíveis continuam pendentes.
+- A branch ainda exige CI para os commits recentes e validação ponta a ponta com a Meta antes de se considerar concluída.
+- Não foi feito merge nem novo deploy de produção nesta etapa.
