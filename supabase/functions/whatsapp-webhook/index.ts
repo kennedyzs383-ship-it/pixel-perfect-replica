@@ -13,7 +13,7 @@ async function resolveActiveWhatsAppChannel(
   supabase: any,
   phoneNumberId: string,
 ): Promise<ActiveWhatsAppChannel | null> {
-  if (!/^\\d{5,30}$/.test(phoneNumberId)) return null;
+  if (!/^\d{5,30}$/.test(phoneNumberId)) return null;
   const { data, error } = await supabase
     .from("whatsapp_business_channels")
     .select("id, owner_id, phone_number_id, waba_id")
@@ -75,7 +75,14 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
       if (!businessChannel || typeof entry.id !== "string" || businessChannel.waba_id !== entry.id) continue;
       const calls = Array.isArray(value.calls) ? value.calls : [];
       const statuses = Array.isArray(value.statuses) ? value.statuses : [];
-      const channel = supabase.channel("whatsapp-calls:" + businessChannel.owner_id, { config: { private: true } });
+      const legacyOwnerId = Deno.env.get("WHATSAPP_OWNER_ID");
+      const legacyPhoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+      // Keep the existing legacy call UI on its original channel only. Other
+      // tenants receive a channel-specific topic until the UI selects a channel.
+      const topic = businessChannel.owner_id === legacyOwnerId && businessChannel.phone_number_id === legacyPhoneNumberId
+        ? "whatsapp-calls:" + businessChannel.owner_id
+        : "whatsapp-calls-channel:" + businessChannel.id;
+      const channel = supabase.channel(topic, { config: { private: true } });
       const result = await channel.send({
         type: "broadcast",
         event: "call_signal",
