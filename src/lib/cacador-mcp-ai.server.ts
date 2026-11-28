@@ -8,9 +8,35 @@ const systemPrompt = 'És o Caçador, assistente da Nuvem. Responde em portuguê
 
 export type CacadorMcpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown> };
 
-export async function askCacadorWithMcp(message: string, context = '') {
-  const apiKey = process.env.ZROUTER_API_KEY;
-  if (!apiKey) throw new Error('Z Router não está configurado no servidor.');
+type BrainConfig = { provider: 'zrouter' | 'lovable' | 'openai-compatible'; apiKey: string; endpoint: string; model: string; label: string };
+
+function whatsappBrainConfig(): BrainConfig {
+  const provider = (process.env.CACADOR_WHATSAPP_BRAIN_PROVIDER || 'zrouter').trim().toLowerCase();
+  if (provider === 'zrouter') {
+    const apiKey = process.env.ZROUTER_API_KEY;
+    if (!apiKey) throw new Error('O cérebro WhatsApp está definido como Z Router, mas falta ZROUTER_API_KEY.');
+    return { provider, apiKey, endpoint: 'https://www.zrouter.com/v1/chat/completions', model: brain.model, label: 'Z Router' };
+  }
+  if (provider === 'lovable') {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    const model = process.env.CACADOR_WHATSAPP_LOVABLE_MODEL;
+    if (!apiKey || !model) throw new Error('O cérebro WhatsApp está definido como Lovable, mas faltam LOVABLE_API_KEY e CACADOR_WHATSAPP_LOVABLE_MODEL.');
+    return { provider, apiKey, endpoint: 'https://ai.gateway.lovable.dev/v1/chat/completions', model, label: 'Lovable AI Gateway' };
+  }
+  if (provider === 'openai-compatible') {
+    const apiKey = process.env.CACADOR_WHATSAPP_BRAIN_API_KEY;
+    const endpoint = process.env.CACADOR_WHATSAPP_BRAIN_BASE_URL;
+    const model = process.env.CACADOR_WHATSAPP_BRAIN_MODEL;
+    if (!apiKey || !endpoint || !model) throw new Error('O cérebro WhatsApp OpenAI-compatible exige CACADOR_WHATSAPP_BRAIN_API_KEY, CACADOR_WHATSAPP_BRAIN_BASE_URL e CACADOR_WHATSAPP_BRAIN_MODEL.');
+    let url: URL;
+    try { url = new URL(endpoint); } catch { throw new Error('CACADOR_WHATSAPP_BRAIN_BASE_URL não é um URL válido.'); }
+    if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && url.hostname === 'localhost')) throw new Error('O endpoint do cérebro WhatsApp tem de usar HTTPS.');
+    return { provider, apiKey, endpoint: url.toString().replace(/\\/$/, '') + '/chat/completions', model, label: 'Provider OpenAI-compatible' };
+  }
+  throw new Error('CACADOR_WHATSAPP_BRAIN_PROVIDER inválido. Usa zrouter, lovable ou openai-compatible.');
+}
+
+async function askCacadorWithMcpUsingBrain(message: string, context: string, brain: BrainConfig) {
   const servers = await listCacadorMcpTools();
   const available = servers.flatMap(server => server.tools.map(tool => ({
     serverId: server.id, serverName: server.name, toolName: tool.name, description: tool.description,
@@ -24,9 +50,9 @@ export async function askCacadorWithMcp(message: string, context = '') {
       parameters: tool.schema,
     },
   }));
-  const response = await fetch('https://www.zrouter.com/v1/chat/completions', {
+  const response = await fetch(brain.endpoint, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${brain.apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: process.env.ZROUTER_MODEL || CACADOR_MODEL,
       messages: [
@@ -39,7 +65,7 @@ export async function askCacadorWithMcp(message: string, context = '') {
     }),
     signal: AbortSignal.timeout(30000),
   });
-  if (!response.ok) throw new Error(`Z Router respondeu com HTTP ${response.status}.`);
+  if (!response.ok) throw new Error(`${brain.label} respondeu com HTTP ${response.status}.`);
   const payload = await response.json() as Completion;
   const assistant = payload.choices?.[0]?.message;
   const proposals: CacadorMcpProposal[] = [];
@@ -55,4 +81,24 @@ export async function askCacadorWithMcp(message: string, context = '') {
     proposals.push({ id: call.id, serverId, serverName: match.serverName, toolName, description: match.description, arguments: args as Record<string, unknown> });
   }
   return { answer: (assistant?.content ?? '').trim(), proposals };
+}
+
+
+/** O cérebro WhatsApp é selecionado exclusivamente por configuração do proprietário no servidor.
+ * O cérebro geral do Caçador permanece no Z Router.
+ */
+export async function askCacadorWhatsAppWithMcp(message: string, context = '') {
+  return askCacadorWithMcpUsingBrain(message, context, whatsappBrainConfig());
+}
+
+export async function askCacadorWithMcp(message: string, context = '') {
+  const apiKey = process.env.ZROUTER_API_KEY;
+  if (!apiKey) throw new Error('Z Router não está configurado no servidor.');
+  return askCacadorWithMcpUsingBrain(message, context, {
+    provider: 'zrouter',
+    apiKey,
+    endpoint: 'https://www.zrouter.com/v1/chat/completions',
+    model: process.env.ZROUTER_MODEL || CACADOR_MODEL,
+    label: 'Z Router',
+  });
 }
