@@ -59,17 +59,36 @@ Deno.serve(async (request: Request): Promise<Response> => {
   else if (action === "get_call_permission_status") { path = `${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(String(phone).replace(/^\+/, ""))}`; method = "GET"; payload = {}; }
   else if (action === "request_permission") {
     path = `${phoneNumberId}/messages`;
-    payload = {
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to: String(phone).replace(/^\+/, ""),
-      type: "interactive",
-      interactive: {
-        type: "call_permission_request",
-        action: { name: "call_permission_request" },
-        body: { text: typeof body.message === "string" && body.message.trim() ? body.message.trim().slice(0, 1024) : "Gostaríamos de falar contigo por chamada WhatsApp sobre a nossa proposta. Autorizas que te liguemos?" },
-      },
-    };
+    const approvedTemplate = Deno.env.get("WHATSAPP_CALL_PERMISSION_TEMPLATE_NAME")?.trim();
+    const templateLanguage = Deno.env.get("WHATSAPP_CALL_PERMISSION_TEMPLATE_LANGUAGE")?.trim() || "pt_PT";
+    if (approvedTemplate) {
+      if (!/^[a-z0-9_]{1,512}$/.test(approvedTemplate) || !/^[a-z]{2}_[A-Z]{2}$/.test(templateLanguage)) {
+        return json({ error: "The configured call-permission template name or language is invalid." }, 503);
+      }
+      // The template must already be approved in WhatsApp Manager and contain
+      // a CALL_PERMISSION_REQUEST component. This path works outside 24h windows.
+      payload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: String(phone).replace(/^\+/, ""),
+        type: "template",
+        template: { name: approvedTemplate, language: { code: templateLanguage } },
+      };
+    } else {
+      // Free-form permission requests are only accepted while the customer
+      // service window is open. Configure an approved template for cold leads.
+      payload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: String(phone).replace(/^\+/, ""),
+        type: "interactive",
+        interactive: {
+          type: "call_permission_request",
+          action: { name: "call_permission_request" },
+          body: { text: typeof body.message === "string" && body.message.trim() ? body.message.trim().slice(0, 1024) : "Gostaríamos de falar contigo por chamada WhatsApp sobre a nossa proposta. Autorizas que te liguemos?" },
+        },
+      };
+    }
   } else {
     if (phone) payload.to = String(phone).replace(/^\+/, "");
     if (callId) payload.call_id = callId;
