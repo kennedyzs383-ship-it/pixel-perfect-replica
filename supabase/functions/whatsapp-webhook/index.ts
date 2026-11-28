@@ -53,19 +53,9 @@ function messageTextFrom(item: Record<string, unknown>, type: string): string {
 }
 
 async function broadcastCallEvents(payload: Record<string, unknown>): Promise<number> {
-  const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const configuredPhoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
-  if (!ownerId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
-    throw new Error("WHATSAPP_OWNER_ID is not configured as a valid account UUID.");
-  }
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Supabase server credentials are not configured for call signaling.");
-  }
-  if (!configuredPhoneNumberId || !/^\d{5,30}$/.test(configuredPhoneNumberId)) {
-    throw new Error("WHATSAPP_PHONE_NUMBER_ID is not configured for call signaling.");
-  }
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase server credentials are not configured for call signaling.");
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -77,19 +67,22 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
     for (const change of entry.changes) {
       if (!isRecord(change) || change.field !== "calls" || !isRecord(change.value)) continue;
       const value = change.value;
-      // A valid Meta signature authenticates the app, not the specific phone number.
-      // Only forward events explicitly addressed to this Caçador account number.
       const metadata = isRecord(value.metadata) ? value.metadata : null;
-      if (metadata?.phone_number_id !== configuredPhoneNumberId) continue;
+      const phoneNumberId = typeof metadata?.phone_number_id === "string" ? metadata.phone_number_id : "";
+      const businessChannel = await resolveActiveWhatsAppChannel(supabase, phoneNumberId);
+      // A valid app signature does not prove which tenant owns this phone number.
+      // Resolve the signed event to a registered channel and require its WABA match.
+      if (!businessChannel || typeof entry.id !== "string" || businessChannel.waba_id !== entry.id) continue;
       const calls = Array.isArray(value.calls) ? value.calls : [];
       const statuses = Array.isArray(value.statuses) ? value.statuses : [];
-      const topic = `whatsapp-calls:${ownerId}`;
-      const channel = supabase.channel(topic, { config: { private: true } });
+      const channel = supabase.channel("whatsapp-calls:" + businessChannel.owner_id, { config: { private: true } });
       const result = await channel.send({
         type: "broadcast",
         event: "call_signal",
         payload: {
-          entry_id: isRecord(entry) ? entry.id : null,
+          channel_id: businessChannel.id,
+          phone_number_id: businessChannel.phone_number_id,
+          entry_id: entry.id,
           metadata: value.metadata ?? null,
           calls,
           statuses,
@@ -98,13 +91,12 @@ async function broadcastCallEvents(payload: Record<string, unknown>): Promise<nu
         },
       });
       await supabase.removeChannel(channel);
-      if (result !== "ok") throw new Error(`Realtime broadcast failed: ${String(result)}`);
+      if (result !== "ok") throw new Error("Realtime call broadcast failed: " + String(result));
       delivered += calls.length + statuses.length;
     }
   }
   return delivered;
 }
-
 
 async function broadcastIncomingMessages(payload: Record<string, unknown>): Promise<number> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
