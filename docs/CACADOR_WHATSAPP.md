@@ -173,6 +173,7 @@ Guardar nas Edge Function Secrets, sem as colocar no código ou no chat:
 - `WHATSAPP_ACCESS_TOKEN`;
 - `WHATSAPP_PHONE_NUMBER_ID`;
 - `WHATSAPP_GRAPH_API_VERSION` (formato `vNN.N`);
+- `WHATSAPP_TURN_URLS` (opcional, URLs TURN separadas por vírgula) e `WHATSAPP_TURN_SHARED_SECRET` (opcional, segredo partilhado do Coturn para gerar credenciais temporárias de uma hora);
 - `WHATSAPP_VERIFY_TOKEN`;
 - `META_APP_SECRET`.
 
