@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.stubEnv('WHATSAPP_ACCESS_TOKEN', 'test-token');
   vi.stubEnv('WHATSAPP_PHONE_NUMBER_ID', '123456789012345');
   vi.stubEnv('WHATSAPP_GRAPH_API_VERSION', 'v23.0');
+  vi.mocked(synthesizeCacadorSpeech).mockResolvedValue({ audioBase64: 'AQIDBAUGBwgJCgsMDQ4PEA==', mimeType: 'audio/mpeg' });
   vi.stubGlobal('fetch', fetchMock);
 });
 
