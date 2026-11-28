@@ -1,6 +1,6 @@
 begin;
 
-select plan(6);
+select plan(8);
 
 select has_table(
   'public',
@@ -44,6 +44,16 @@ select ok(
       and roles @> array['authenticated']::name[]
   ),
   'Authenticated channel management policy is owner-scoped'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.get_whatsapp_business_channel_secret(uuid,text)', 'EXECUTE'),
+  'Anonymous users cannot retrieve channel secrets'
+);
+
+select ok(
+  not has_function_privilege('authenticated', 'public.get_whatsapp_business_channel_secret(uuid,text)', 'EXECUTE'),
+  'Authenticated owners cannot retrieve decrypted channel secrets'
 );
 
 select * from finish();
