@@ -237,7 +237,7 @@ Deno.serve(async (request: Request) => {
 
   let claimedTotal = 0, processed = 0, retried = 0, unsupported = 0, channelErrors = 0;
   for (const channel of (channels || []) as ChannelConfig[]) {
-    if (!channel.id || !channel.owner_id || !/^\\d{5,30}$/.test(channel.phone_number_id)) continue;
+    if (!channel.id || !channel.owner_id || !/^\d{5,30}$/.test(channel.phone_number_id)) continue;
     let brain: { apiKey: string; endpoint: string; model: string };
     try { brain = await brainConfig(admin, channel); }
     catch (error) {
