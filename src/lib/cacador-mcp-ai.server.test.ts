@@ -13,7 +13,7 @@ beforeEach(() => {
   vi.stubEnv('ZROUTER_API_KEY', 'test-key');
   vi.stubEnv('ZROUTER_MODEL', 'test-model');
   vi.stubGlobal('fetch', fetchMock);
-  vi.mocked(listCacadorMcpTools).mockResolvedValue([{ id: 'docs', name: 'Documentos', connected: true, tools: [{ name: 'search_docs', description: 'Pesquisa documentos', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } }] }]);
+  vi.mocked(listCacadorMcpTools).mockResolvedValue([{ id: 'docs', name: 'Documentos', connected: true, tools: [{ name: 'search_docs', description: 'Pesquisa documentos', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } }] }, { id: 'whatsapp-meta', name: 'WhatsApp Cloud API · MCP integrado', connected: true, tools: [{ name: 'send_text_message', description: 'Envia mensagem WhatsApp individual com aprovação humana.', inputSchema: { type: 'object', properties: { to: { type: 'string' }, message: { type: 'string' } }, required: ['to', 'message'] } }] }]);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
