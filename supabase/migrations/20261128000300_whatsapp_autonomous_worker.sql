@@ -65,3 +65,37 @@ $$;
 
 revoke all on function public.claim_whatsapp_inbox_messages_for_worker(uuid, text, integer) from public, anon, authenticated;
 grant execute on function public.claim_whatsapp_inbox_messages_for_worker(uuid, text, integer) to service_role;
+
+
+-- Authenticated owner can acknowledge or reject only their own prepared draft.
+-- This RPC never executes a WhatsApp action; it only changes the approval record.
+create or replace function public.set_whatsapp_inbox_draft_status(
+  p_id uuid,
+  p_status text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_owner uuid := auth.uid();
+  v_count integer;
+begin
+  if v_owner is null then
+    raise exception 'Authentication required' using errcode = '28000';
+  end if;
+  if p_status not in ('pending_approval', 'approved', 'rejected') then
+    raise exception 'Invalid draft status' using errcode = '22023';
+  end if;
+  update public.whatsapp_inbox_messages
+  set draft_status = p_status, updated_at = now()
+  where id = p_id and owner_id = v_owner
+    and (draft_status = 'pending_approval' or p_status = 'pending_approval');
+  get diagnostics v_count = row_count;
+  return v_count = 1;
+end;
+$$;
+
+revoke all on function public.set_whatsapp_inbox_draft_status(uuid, text) from public, anon;
+grant execute on function public.set_whatsapp_inbox_draft_status(uuid, text) to authenticated;
