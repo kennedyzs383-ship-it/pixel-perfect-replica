@@ -6,6 +6,7 @@ import { transcribeCacadorVoice, synthesizeCacadorVoice } from "@/lib/cacador-vo
 import { getWhatsAppCallId, isTerminalWhatsAppCallStatus, parseWhatsAppCallEvents, parseWhatsAppCallStatuses, statusBelongsToCall, type WhatsAppCallEvent } from "@/lib/cacador-call-events";
 
 type CallEvent = WhatsAppCallEvent;
+type RecentWhatsAppCustomer = { from_phone: string; contact_name: string | null; received_at: string };
 
 function waitForIceGathering(peer: RTCPeerConnection): Promise<void> {
   if (peer.iceGatheringState === "complete") return Promise.resolve();
@@ -28,6 +29,7 @@ function waitForIceGathering(peer: RTCPeerConnection): Promise<void> {
 export function CacadorWhatsAppCalling() {
   const [userId, setUserId] = useState("");
   const [phone, setPhone] = useState("");
+  const [recentCustomers, setRecentCustomers] = useState<RecentWhatsAppCustomer[]>([]);
   const [status, setStatus] = useState("A verificar sessão…");
   const [busy, setBusy] = useState(false);
   const [realtimeReady, setRealtimeReady] = useState(false);
@@ -85,6 +87,28 @@ export function CacadorWhatsAppCalling() {
     setActiveCallId("");
     setIncoming(null);
     setMuted(false);
+  }, []);
+
+  const loadRecentCustomers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("whatsapp_inbox_messages")
+      .select("from_phone, contact_name, received_at")
+      .order("received_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      setStatus("Não foi possível carregar os números recentes da inbox WhatsApp: " + error.message);
+      return;
+    }
+    const unique = new Map<string, RecentWhatsAppCustomer>();
+    for (const row of data ?? []) {
+      if (!/^\d{8,15}$/.test(row.from_phone) || unique.has(row.from_phone)) continue;
+      unique.set(row.from_phone, {
+        from_phone: row.from_phone,
+        contact_name: row.contact_name,
+        received_at: row.received_at,
+      });
+    }
+    setRecentCustomers(Array.from(unique.values()).slice(0, 20));
   }, []);
 
   const callControl = useCallback(async (body: Record<string, unknown>) => {
@@ -335,6 +359,7 @@ export function CacadorWhatsAppCalling() {
         return;
       }
       setUserId(data.user.id);
+      void loadRecentCustomers();
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session?.access_token) await supabase.realtime.setAuth(sessionData.session.access_token);
       channel = supabase.channel(`whatsapp-calls:${data.user.id}`, { config: { private: true } })
@@ -342,6 +367,9 @@ export function CacadorWhatsAppCalling() {
           void receiveSignal(payload as Record<string, unknown>).catch((error: unknown) => {
             setStatus(error instanceof Error ? error.message : "Erro ao processar sinalização da chamada.");
           });
+        })
+        .on("broadcast", { event: "incoming_message" }, () => {
+          void loadRecentCustomers();
         })
         .subscribe((state) => {
           if (state === "SUBSCRIBED") {
@@ -358,7 +386,7 @@ export function CacadorWhatsAppCalling() {
       if (channel) void supabase.removeChannel(channel);
       cleanup();
     };
-  }, [cleanup, receiveSignal]);
+  }, [cleanup, loadRecentCustomers, receiveSignal]);
 
   const requestPermission = async () => {
     setBusy(true);
@@ -465,6 +493,20 @@ export function CacadorWhatsAppCalling() {
         <h2 style={{ fontSize: 17, margin: 0 }}>Chamadas WhatsApp em tempo real</h2>
       </div>
       <p style={{ color: "#737583", fontSize: 12, lineHeight: 1.6 }}>{status}</p>
+      {recentCustomers.length > 0 && <div style={{ marginTop: 12 }}>
+        <div style={{ color: "#737583", fontSize: 11, fontWeight: 750, marginBottom: 7 }}>Clientes identificados nas mensagens WhatsApp</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+          {recentCustomers.map((customer) => <button
+            key={customer.from_phone}
+            type="button"
+            onClick={() => setPhone("+" + customer.from_phone)}
+            style={{ border: phone.replace(/^\+/, "") === customer.from_phone ? "1px solid #16845d" : "1px solid #e0e1e8", borderRadius: 8, background: phone.replace(/^\+/, "") === customer.from_phone ? "#edf8f1" : "#fff", color: "#3e4050", padding: "8px 10px", fontSize: 11, cursor: "pointer", textAlign: "left" }}
+          >
+            <strong>{customer.contact_name || "Cliente WhatsApp"}</strong><br />
+            <span style={{ color: "#737583" }}>+{customer.from_phone}</span>
+          </button>)}
+        </div>
+      </div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
         <input aria-label="Número do cliente" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+244923000000" style={{ flex: "1 1 220px", minWidth: 0, border: "1px solid #d9dae3", borderRadius: 8, padding: "11px 12px", fontSize: 13 }} />
         <button type="button" disabled={busy || !userId || !phone.trim()} onClick={() => void requestPermission()} style={{ border: 0, borderRadius: 8, padding: "10px 13px", background: "#f0edff", color: "#5e45b4", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: busy || !userId || !phone.trim() ? .5 : 1 }}>Pedir autorização</button>
