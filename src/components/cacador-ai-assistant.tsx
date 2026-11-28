@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { askCacadorLocalAI, loadCacadorLocalAI, type LocalAIProgress } from "@/lib/cacador-local-ai";
 import { askCacadorAI } from "@/lib/cacador-ai.functions";
 import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
+import { transcribeCacadorVoice } from "@/lib/cacador-voice.functions";
 import { executeCacadorMcpTool } from "@/lib/cacador-mcp.functions";
 import { askOllama, type CacadorProvider } from "@/lib/cacador-ai-providers";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +13,51 @@ type ChatLine = { role: "user" | "assistant"; text: string; sender?: string };
 type IncomingWhatsAppMessage = { message_id: string; from: string; text: string; contact_name?: string | null; phone_number_id?: string };
 type McpProposal = { id: string; serverId: string; serverName: string; toolName: string; description: string; arguments: Record<string, unknown> };
 const CHAT_STORAGE_KEY = "nuvem-cacador-chat-v1";
+async function whatsappMediaBlob(mediaId: string, messageId: string): Promise<Blob> {
+  const { data, error } = await supabase.functions.invoke("whatsapp-media", {
+    body: { media_id: mediaId, message_id: messageId },
+    responseType: "blob",
+  });
+  if (error) throw new Error(error.message || "Não foi possível recuperar o ficheiro WhatsApp.");
+  if (!(data instanceof Blob) || data.size === 0 || data.size > 20 * 1024 * 1024) {
+    throw new Error("A Meta devolveu um ficheiro vazio ou acima do limite de 20 MB.");
+  }
+  return data;
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function interpretWhatsAppMedia(row: {
+  message_id: string;
+  message_type: string;
+  media_id?: string | null;
+  media_mime_type?: string | null;
+}): Promise<string> {
+  if (!row.media_id) throw new Error("A mensagem multimédia não contém um media ID válido.");
+  const blob = await whatsappMediaBlob(row.media_id, row.message_id);
+  const mime = (row.media_mime_type || blob.type || "").split(";")[0].trim().toLowerCase();
+  if (row.message_type === "audio") {
+    const supported = new Set(["audio/webm", "audio/mp4", "audio/ogg", "audio/mpeg", "audio/wav", "audio/x-wav"]);
+    if (!supported.has(mime)) throw new Error("O áudio foi recebido, mas o formato " + (mime || "desconhecido") + " ainda não é suportado para transcrição.");
+    const result = await transcribeCacadorVoice({ data: { audioBase64: await blobToBase64(blob), mimeType: mime } });
+    if (!result.text?.trim()) throw new Error("Não foi possível reconhecer fala no áudio recebido.");
+    return "[Áudio WhatsApp transcrito]: " + result.text.trim().slice(0, 12000);
+  }
+  if (row.message_type === "document" && mime === "text/plain") {
+    const text = (await blob.text()).trim();
+    if (!text) throw new Error("O documento de texto está vazio.");
+    return "[Documento WhatsApp]: " + text.slice(0, 12000);
+  }
+  throw new Error("A mensagem WhatsApp do tipo " + row.message_type + " (" + (mime || "MIME desconhecido") + ") foi guardada, mas ainda não existe um interpretador seguro configurado para este formato.");
+}
+
 function readStoredMessages(): ChatLine[] {
   if (typeof window === "undefined") return [];
   try {
@@ -99,21 +145,36 @@ export function CacadorAIAssistant() {
           seenWhatsAppMessageIds.current.add(messageId);
 
           const sender = row.contact_name?.trim() || "+" + row.from_phone;
+          let incomingText = typeof row.text_body === "string" ? row.text_body.trim() : "";
+          if (!incomingText) {
+            try {
+              incomingText = await interpretWhatsAppMedia({
+                message_id: row.message_id,
+                message_type: row.message_type,
+                media_id: row.media_id,
+                media_mime_type: row.media_mime_type,
+              });
+            } catch (mediaError) {
+              const reason = mediaError instanceof Error ? mediaError.message : "Formato multimédia não suportado.";
+              const { error: skipError } = await supabase.rpc("skip_whatsapp_inbox_message", {
+                p_id: row.id,
+                p_reason: reason.slice(0, 1000),
+              });
+              if (skipError) throw skipError;
+              setMessages(previous => [...previous, {
+                role: "user",
+                sender: "WhatsApp · " + sender,
+                text: "[Multimédia recebida e guardada, mas não interpretada: " + reason + "]",
+              }].slice(-100));
+              setAiError(reason);
+              continue;
+            }
+          }
           const customerLine: ChatLine = {
             role: "user",
             sender: "WhatsApp · " + sender,
-            text: row.text_body?.slice(0, 4096) || "[Mensagem WhatsApp do tipo " + row.message_type + "; conteúdo multimédia ainda não interpretado.]",
+            text: incomingText.slice(0, 12000),
           };
-          if (!row.text_body?.trim()) {
-            setMessages(previous => [...previous, customerLine].slice(-100));
-            const { error: skipError } = await supabase.rpc("skip_whatsapp_inbox_message", {
-              p_id: row.id,
-              p_reason: "Mensagem " + row.message_type + " guardada; descodificação e interpretação de multimédia ainda não estão disponíveis.",
-            });
-            if (skipError) throw skipError;
-            setAiError("Foi recebida uma mensagem WhatsApp do tipo " + row.message_type + ". Ficou guardada e marcada como não suportada; não foi apresentada como processada nem enviada ao Z Router.");
-            continue;
-          }
 
           setBusy(true);
           setAiError("");
@@ -124,7 +185,7 @@ export function CacadorAIAssistant() {
             const result = await askCacadorWithMcpFn({
               data: {
                 message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + row.from_phone +
-                  ". Nome: " + sender + ". Mensagem: " + row.text_body +
+                  ". Nome: " + sender + ". Mensagem: " + incomingText +
                   ". Responde em português natural de Angola. Se for apropriado, prepara uma resposta WhatsApp usando a ferramenta send_text_message, mas nunca a envies sem aprovação humana.",
                 context,
               },
@@ -137,7 +198,7 @@ export function CacadorAIAssistant() {
             if (result.answer?.trim()) {
               speakRef.current(result.answer);
             } else if (!result.proposals.length) {
-              throw new Error("O Z Router não preparou uma resposta; a mensagem será tentada novamente.");
+              throw new Error("O cérebro configurado na MCP não preparou uma resposta; a mensagem será tentada novamente.");
             }
             const { error: completeError } = await supabase.rpc(
               "complete_whatsapp_inbox_message",
@@ -148,9 +209,9 @@ export function CacadorAIAssistant() {
             seenWhatsAppMessageIds.current.delete(messageId);
             await supabase.rpc("fail_whatsapp_inbox_message", {
               p_id: row.id,
-              p_error: error instanceof Error ? error.message : "Falha ao encaminhar a mensagem ao Z Router.",
+              p_error: error instanceof Error ? error.message : "Falha ao encaminhar a mensagem ao cérebro configurado na MCP.",
             });
-            if (active) setAiError(error instanceof Error ? error.message : "Não foi possível encaminhar a mensagem WhatsApp ao Z Router.");
+            if (active) setAiError(error instanceof Error ? error.message : "Não foi possível encaminhar a mensagem WhatsApp ao cérebro configurado na MCP.");
           } finally {
             if (active) setBusy(false);
           }
