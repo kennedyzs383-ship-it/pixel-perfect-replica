@@ -145,3 +145,6 @@ O segredo também tem de ser configurado nas secrets das Edge Functions com o no
 **Limite atual:** esta configuração do worker é deliberadamente scoped a um proprietário e um número Business por projeto, conforme o modelo de configuração WhatsApp já existente. Não é ainda um serviço multi-tenant com vários proprietários Meta independentes no mesmo projeto. O cron só deve ser ativado depois de a migration e a Edge Function serem instaladas num ambiente de validação e de as secrets serem configuradas.
 
 A migration 20261128000300_whatsapp_autonomous_worker.sql, a Edge Function whatsapp-inbox-worker e a recuperação de propostas na interface fazem parte apenas desta branch/PR. Não foram aplicadas ao projeto Supabase ativo nem publicadas.
+
+
+Para o worker propor ferramentas dos outros servidores MCP configurados no Caçador, disponibilizar também CACADOR_MCP_SERVERS_JSON e cada secret referenciada por tokenEnv no ambiente das Edge Functions. A lista respeita allowedTools e só aceita endpoints HTTPS. As ferramentas continuam sem execução automática: o worker persiste a proposta e o painel autenticado exige aprovação antes de chamar o servidor MCP.
