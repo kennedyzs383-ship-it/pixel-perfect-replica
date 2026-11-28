@@ -177,3 +177,10 @@ A migration e o novo encaminhamento do webhook estão apenas na branch/PR. Não 
 
 
 A migration 20261128000500_whatsapp_inbox_channel_identity.sql associa cada mensagem persistida ao canal validado, com chave estrangeira composta (owner_id, channel_id). Os registos históricos são associados quando existe correspondência inequívoca de proprietário e phone_number_id; os restantes permanecem legados com channel_id nulo.
+
+
+### Encaminhamento multi-tenant dos eventos de chamadas (correção)
+- Eventos `calls` já não dependem de `WHATSAPP_OWNER_ID` nem de `WHATSAPP_PHONE_NUMBER_ID` globais. O webhook resolve `metadata.phone_number_id` para um canal ativo e exige correspondência exata entre `entry.id` e `waba_id` desse canal.
+- O evento Realtime inclui `channel_id` e `phone_number_id` e é publicado apenas no tópico privado do proprietário do canal resolvido. Eventos sem canal ativo ou com WABA divergente são ignorados.
+- Corrigida também a validação numérica dos IDs Meta no webhook e no worker para aceitar efetivamente sequências de dígitos.
+- O cliente de chamadas ainda tem de validar `channel_id` e escolher o token Meta do canal antes de iniciar/atender chamadas; esta alteração protege o encaminhamento do webhook, não conclui a migração do executor de chamadas.
