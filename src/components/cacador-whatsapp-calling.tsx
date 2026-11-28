@@ -218,6 +218,9 @@ export function CacadorWhatsAppCalling() {
           };
           recorder.onstop = () => {
             if (recorderRef.current === recorder) recorderRef.current = null;
+            // A new speech onset can arrive before the recorder's stop event fires.
+            // Reset the VAD state so the next animation frame can start a fresh segment.
+            speakingNow = false;
             if (!recordingActiveRef.current || peerRef.current !== peer) return;
             const segment = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
             if (segment.size > 1200) processCustomerAudio(segment);
