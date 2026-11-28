@@ -5,7 +5,7 @@ vi.mock('./cacador-mcp.server', () => ({
 }));
 
 import { listCacadorMcpTools } from './cacador-mcp.server';
-import { askCacadorWithMcp } from './cacador-mcp-ai.server';
+import { askCacadorWithMcp, askCacadorWhatsAppWithMcp } from './cacador-mcp-ai.server';
 
 const fetchMock = vi.fn();
 beforeEach(() => {
@@ -48,6 +48,40 @@ describe('Caçador MCP AI proposals', () => {
   it('requires the Z Router secret', async () => {
     vi.stubEnv('ZROUTER_API_KEY', '');
     await expect(askCacadorWithMcp('Olá')).rejects.toThrow('Z Router não está configurado');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('WhatsApp-only brain selection', () => {
+  it('uses Lovable AI Gateway without changing the global Z Router brain', async () => {
+    vi.stubEnv('CACADOR_WHATSAPP_BRAIN_PROVIDER', 'lovable');
+    vi.stubEnv('LOVABLE_API_KEY', 'lovable-test-key');
+    vi.stubEnv('CACADOR_WHATSAPP_LOVABLE_MODEL', 'google/gemini-test');
+    fetchMock.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: 'Resposta Lovable.' } }] }));
+    const result = await askCacadorWhatsAppWithMcp('Responde ao cliente.');
+    expect(result.answer).toBe('Resposta Lovable.');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://ai.gateway.lovable.dev/v1/chat/completions');
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(request.model).toBe('google/gemini-test');
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer lovable-test-key');
+  });
+
+  it('supports a custom OpenAI-compatible provider over HTTPS', async () => {
+    vi.stubEnv('CACADOR_WHATSAPP_BRAIN_PROVIDER', 'openai-compatible');
+    vi.stubEnv('CACADOR_WHATSAPP_BRAIN_API_KEY', 'custom-test-key');
+    vi.stubEnv('CACADOR_WHATSAPP_BRAIN_BASE_URL', 'https://ai.example.test/v1/');
+    vi.stubEnv('CACADOR_WHATSAPP_BRAIN_MODEL', 'custom-model');
+    fetchMock.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: 'Resposta custom.' } }] }));
+    const result = await askCacadorWhatsAppWithMcp('Responde.');
+    expect(result.answer).toBe('Resposta custom.');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://ai.example.test/v1/chat/completions');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe('custom-model');
+  });
+
+  it('rejects an unknown WhatsApp brain provider before making a request', async () => {
+    vi.stubEnv('CACADOR_WHATSAPP_BRAIN_PROVIDER', 'unknown-provider');
+    await expect(askCacadorWhatsAppWithMcp('Olá')).rejects.toThrow('CACADOR_WHATSAPP_BRAIN_PROVIDER inválido');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
