@@ -147,8 +147,7 @@ async function listAvailableTools(): Promise<AvailableTool[]> {
   return [whatsapp, ...external.flat()];
 }
 
-async function prepareDraft(message: string, context: string, customerPhone: string) {
-  const brain = brainConfig();
+async function prepareDraft(message: string, context: string, customerPhone: string, brain: { apiKey: string; endpoint: string; model: string }) {
   const available = await listAvailableTools();
   const exposedTools = available.map((tool, index) => ({
     type: "function",
