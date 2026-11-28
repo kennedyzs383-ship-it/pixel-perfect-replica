@@ -78,7 +78,9 @@ O número de origem tem de ser elegível para Calling e estar registado na Cloud
 - Os números apresentados no painel são números de clientes que já enviaram mensagens para a inbox. A Cloud API não dá acesso automático à lista privada de contactos do telemóvel.
 - A inbox persiste mesmo com o painel fechado, mas a geração de respostas conversacionais continua dependente do painel autenticado estar aberto.
 - Mensagens iniciadas pela empresa e chamadas estão sujeitas às regras de consentimento, templates, limites e preços da Meta.
-- O cérebro chamado pela integração WhatsApp é o provider MCP existente; a seleção global entre diferentes inteligências não foi alterada nesta entrega.
+- A inbox WhatsApp possui agora seleção de cérebro isolada da IA global. O proprietário escolhe no servidor através de `CACADOR_WHATSAPP_BRAIN_PROVIDER`: `zrouter` (predefinido), `lovable` ou `openai-compatible`. A IA global da aplicação continua independente e não é alterada por esta configuração.
+- Para `lovable`, configurar `LOVABLE_API_KEY` e `CACADOR_WHATSAPP_LOVABLE_MODEL`; o endpoint é o Lovable AI Gateway. Para `openai-compatible`, configurar `CACADOR_WHATSAPP_BRAIN_API_KEY`, `CACADOR_WHATSAPP_BRAIN_BASE_URL` (base HTTPS, sem `/chat/completions`) e `CACADOR_WHATSAPP_BRAIN_MODEL`. Para `zrouter`, são usadas `ZROUTER_API_KEY` e `ZROUTER_MODEL` (ou o modelo predefinido). Todas as chaves ficam apenas nas secrets do servidor.
+- A seleção é por configuração do proprietário no alojamento, não por um seletor público no painel. Os providers têm de suportar a API Chat Completions e chamadas de ferramentas compatíveis; providers MCP que apenas expõem ferramentas não são, por si só, modelos de linguagem.
 - Não foram feitas chamadas reais nem enviados áudios reais durante os testes automatizados.
 
 ## Código e validação
