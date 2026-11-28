@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { synthesizeCacadorSpeech } from './cacador-voice.server';
 
 const CustomerSchema = z.string().trim().regex(/^\+?[1-9]\d{7,14}$/, 'Indica o número WhatsApp do cliente em formato internacional.');
 const CallPermissionSchema = z.object({
@@ -20,6 +21,10 @@ const ManageCallSchema = z.object({
 const SendTextSchema = z.object({
   to: z.string().trim().regex(/^\+?[1-9]\d{7,14}$/, 'Indica o número do cliente em formato internacional, com indicativo do país.'),
   message: z.string().trim().min(1).max(4096),
+});
+const SendAudioSchema = z.object({
+  to: CustomerSchema,
+  text: z.string().trim().min(1).max(4000),
 });
 
 function config() {
@@ -77,6 +82,19 @@ export function listWhatsAppMcpTools() {
           message: { type: 'string', minLength: 1, maxLength: 4096, description: 'Texto da mensagem.' },
         },
         required: ['to', 'message'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'send_audio_message',
+      description: 'Gera uma mensagem de voz com o serviço TTS configurado e envia-a pelo WhatsApp Cloud API. Requer aprovação humana e pode ter custos do fornecedor de voz e da Meta.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Número do destinatário em formato internacional.' },
+          text: { type: 'string', minLength: 1, maxLength: 4000, description: 'Texto que será convertido em voz e enviado como áudio WhatsApp.' },
+        },
+        required: ['to', 'text'],
         additionalProperties: false,
       },
     },
@@ -181,6 +199,45 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
     if (parsed.data.biz_opaque_callback_data) payload.biz_opaque_callback_data = parsed.data.biz_opaque_callback_data;
     const result = await graphRequest(`${phoneNumberId}/calls`, { method: 'POST', body: JSON.stringify(payload) });
     return { isError: false, content: JSON.stringify(result).slice(0, 6000) };
+  }
+
+  if (toolName === 'send_audio_message') {
+    const parsed = SendAudioSchema.safeParse(args);
+    if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || 'Argumentos de áudio inválidos.');
+    const { accessToken, phoneNumberId, graphVersion } = config();
+    if (!accessToken || !phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId) || !graphVersion || !/^v\d+\.\d+$/.test(graphVersion)) {
+      throw new Error('WhatsApp Cloud API não configurada para enviar áudio.');
+    }
+    const speech = await synthesizeCacadorSpeech({ text: parsed.data.text });
+    const audioBytes = Uint8Array.from(atob(speech.audioBase64), character => character.charCodeAt(0));
+    if (!audioBytes.length || audioBytes.byteLength > 8_000_000) throw new Error('O áudio gerado está vazio ou excede 8 MB.');
+    const form = new FormData();
+    form.set('messaging_product', 'whatsapp');
+    form.set('file', new Blob([audioBytes], { type: 'audio/mpeg' }), 'cacador-audio.mp3');
+    const uploadResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}/media`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + accessToken },
+      body: form,
+      signal: AbortSignal.timeout(45000),
+      redirect: 'error',
+    });
+    const upload = await uploadResponse.json().catch(() => ({})) as { id?: string; error?: { message?: string } };
+    if (!uploadResponse.ok || typeof upload.id !== 'string') {
+      throw new Error(upload.error?.message || 'A Meta não aceitou o ficheiro de áudio.');
+    }
+    const to = parsed.data.to.replace(/^\+/, '');
+    const sent = await graphRequest(`${phoneNumberId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'audio',
+        audio: { id: upload.id },
+      }),
+    });
+    const messageId = sent.messages?.[0]?.id;
+    return { isError: false, content: messageId ? `Áudio aceite pela Meta para ${to}. ID: ${messageId}` : 'Áudio enviado à API da Meta; não foi devolvido um identificador de mensagem.' };
   }
 
   if (toolName === 'send_text_message') {
