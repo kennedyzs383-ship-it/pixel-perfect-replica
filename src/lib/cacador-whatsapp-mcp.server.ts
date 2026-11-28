@@ -152,11 +152,15 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
       !phoneNumberId && 'WHATSAPP_PHONE_NUMBER_ID',
       !graphVersion && 'WHATSAPP_GRAPH_API_VERSION',
     ].filter(Boolean);
+    const voiceReady = Boolean(process.env.CACADOR_AUDIO_API_KEY);
+    const callTemplateReady = Boolean(process.env.WHATSAPP_CALL_PERMISSION_TEMPLATE_NAME);
     return {
       isError: false,
       content: missing.length
         ? `WhatsApp Cloud API ainda não configurada. Secrets em falta: ${missing.join(', ')}. Nenhum número está ligado.`
-        : 'Credenciais e identificador do número estão configurados no servidor. Isto não confirma ainda a validade do token, a inscrição do número nem a subscrição do webhook.',
+        : 'Credenciais e identificador do número estão configurados no servidor. Isto não confirma ainda a validade do token, a inscrição do número nem a subscrição do webhook. ' +
+          (voiceReady ? 'TTS configurado para mensagens de voz e chamadas. ' : 'Falta CACADOR_AUDIO_API_KEY para gerar áudio. ') +
+          (callTemplateReady ? 'Template de autorização de chamada configurado. ' : 'Sem template aprovado configurado: pedidos interativos de chamada só funcionam dentro da janela de atendimento.'),
     };
   }
 
