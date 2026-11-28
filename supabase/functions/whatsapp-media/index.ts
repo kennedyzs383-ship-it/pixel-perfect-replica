@@ -11,6 +11,8 @@ const json = (body: unknown, status = 200) =>
 
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const requestLength = Number(request.headers.get("content-length") ?? 0);
+  if (requestLength > 16 * 1024) return json({ error: "Request body is too large." }, 413);
 
   const authorization = request.headers.get("authorization") ?? "";
   const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
@@ -87,7 +89,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const mediaUrl = new URL(metadata.url);
     const trustedHost = mediaUrl.hostname === "lookaside.fbsbx.com" ||
       mediaUrl.hostname.endsWith(".fbcdn.net");
-    if (mediaUrl.protocol !== "https:" || !trustedHost || mediaUrl.username || mediaUrl.password) {
+    if (mediaUrl.protocol !== "https:" || (mediaUrl.port !== "" && mediaUrl.port !== "443") || !trustedHost || mediaUrl.username || mediaUrl.password) {
       return json({ error: "Meta returned an untrusted media URL." }, 502);
     }
 
