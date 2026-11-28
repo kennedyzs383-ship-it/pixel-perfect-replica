@@ -148,3 +148,6 @@ A migration 20261128000300_whatsapp_autonomous_worker.sql, a Edge Function whats
 
 
 Para o worker propor ferramentas dos outros servidores MCP configurados no Caçador, disponibilizar também CACADOR_MCP_SERVERS_JSON e cada secret referenciada por tokenEnv no ambiente das Edge Functions. A lista respeita allowedTools e só aceita endpoints HTTPS. As ferramentas continuam sem execução automática: o worker persiste a proposta e o painel autenticado exige aprovação antes de chamar o servidor MCP.
+
+
+O painel também permite rejeitar explicitamente uma proposta recuperada da inbox. A rejeição é persistida com a RPC autenticada e remove a proposta da fila de aprovação; não executa qualquer ferramenta nem envia mensagem.
