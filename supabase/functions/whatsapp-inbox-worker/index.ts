@@ -225,7 +225,7 @@ Deno.serve(async (request: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const ownerId = Deno.env.get("WHATSAPP_OWNER_ID");
   const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
-  if (!url || !serviceKey || !ownerId || !phoneNumberId || !/^\\d{5,30}$/.test(phoneNumberId)) {
+  if (!url || !serviceKey || !ownerId || !phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) {
     return json({ error: "Worker owner/Business channel is not configured" }, 503);
   }
 
