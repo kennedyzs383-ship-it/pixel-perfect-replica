@@ -48,7 +48,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const phone = body.to;
   const callId = body.call_id;
   const sdp = body.sdp;
-  if (!["request_permission", "connect", "pre_accept", "accept", "reject", "terminate", "get_call_settings", "get_call_permission_status"].includes(String(action))) {
+  if (!["request_permission", "connect", "pre_accept", "accept", "reject", "terminate", "get_call_settings", "get_call_permission_status", "get_ice_servers"].includes(String(action))) {
     return json({ error: "Unsupported call action." }, 400);
   }
   if (["request_permission", "connect", "get_call_permission_status"].includes(String(action)) && !validPhone(phone)) {
@@ -59,6 +59,31 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
   if (["pre_accept", "accept", "reject", "terminate"].includes(String(action)) && (typeof callId !== "string" || callId.length < 8 || callId.length > 200)) {
     return json({ error: "A valid WhatsApp call_id is required." }, 400);
+  }
+
+  if (action === "get_ice_servers") {
+    const iceServers: Array<Record<string, unknown>> = [{ urls: "stun:stun.l.google.com:19302" }];
+    const turnUrls = (Deno.env.get("WHATSAPP_TURN_URLS") ?? "").split(",").map(value => value.trim()).filter(Boolean);
+    const turnSecret = Deno.env.get("WHATSAPP_TURN_SHARED_SECRET");
+    if (turnUrls.length && turnSecret) {
+      if (turnUrls.some(value => !/^turns?:[^\s]+$/i.test(value))) {
+        return json({ error: "TURN server URLs are invalid." }, 503);
+      }
+      // Coturn REST credentials expire after one hour and are scoped to this owner.
+      const username = `${Math.floor(Date.now() / 1000) + 3600}:${ownerId}`;
+      const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(turnSecret),
+        { name: "HMAC", hash: "SHA-1" },
+        false,
+        ["sign"],
+      );
+      const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(username)));
+      let binary = "";
+      for (const byte of signature) binary += String.fromCharCode(byte);
+      iceServers.push({ urls: turnUrls, username, credential: btoa(binary) });
+    }
+    return json({ ok: true, result: { ice_servers: iceServers, turn_configured: iceServers.length > 1 } });
   }
 
   let path = `${phoneNumberId}/calls`;
