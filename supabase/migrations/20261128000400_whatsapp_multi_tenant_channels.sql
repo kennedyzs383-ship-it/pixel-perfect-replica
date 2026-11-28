@@ -78,6 +78,25 @@ begin
       using errcode = '42501';
   end if;
 
+  -- Secret references are writable only inside the owner-checked Vault RPC
+  -- (whose SECURITY DEFINER context is postgres) or by the trusted service role.
+  if request_role <> 'service_role' and current_user <> 'postgres' then
+    if tg_op = 'INSERT' and (
+      new.brain_api_key_secret_name is not null
+      or new.meta_access_token_secret_name is not null
+    ) then
+      raise exception 'Channel secrets must be registered through the secure Vault RPC'
+        using errcode = '42501';
+    end if;
+    if tg_op = 'UPDATE' and (
+      new.brain_api_key_secret_name is distinct from old.brain_api_key_secret_name
+      or new.meta_access_token_secret_name is distinct from old.meta_access_token_secret_name
+    ) then
+      raise exception 'Channel secret references cannot be modified directly'
+        using errcode = '42501';
+    end if;
+  end if;
+
   new.updated_at := now();
   return new;
 end;
