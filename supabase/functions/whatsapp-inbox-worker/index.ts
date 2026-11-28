@@ -108,7 +108,17 @@ async function prepareDraft(message: string, context: string, customerPhone: str
     });
   }
   if (!answer && proposals.length === 0) throw new Error("WhatsApp brain returned neither a draft nor a valid proposal");
-  return { answer, proposals };
+  // If the model returns only prose, turn it into a send proposal. It remains a draft:
+  // no Meta API call is made until the owner explicitly approves it in the dashboard.
+  if (proposals.length === 0 && answer) {
+    proposals.push({
+      id: "draft-" + crypto.randomUUID(), serverId: "whatsapp-meta",
+      serverName: "WhatsApp Cloud API · MCP integrado", toolName: "send_text_message",
+      description: "Resposta preparada automaticamente; aguarda aprovação humana.",
+      arguments: { to: customerPhone, message: answer },
+    });
+  }
+  return { answer, proposals: proposals.slice(0, 1) };
 }
 
 Deno.serve(async (request: Request) => {
