@@ -28,9 +28,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ error: "WhatsApp Cloud API credentials are not configured." }, 503);
   }
 
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader !== null) {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isSafeInteger(contentLength) || contentLength < 0 || contentLength > 64 * 1024) {
+      return json({ error: "Request body is too large or has an invalid length." }, 413);
+    }
+  }
   let body: Record<string, unknown>;
   try {
-    const value = await request.json();
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 64 * 1024) return json({ error: "Request body is too large." }, 413);
+    const value: unknown = JSON.parse(rawBody);
     if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "Invalid request body." }, 400);
     body = value as Record<string, unknown>;
   } catch { return json({ error: "Invalid JSON." }, 400); }
