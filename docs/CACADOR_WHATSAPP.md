@@ -87,5 +87,5 @@ O número de origem tem de ser elegível para Calling e estar registado na Cloud
 - PR: [#19 — feat/cacador-whatsapp-dual-channel](https://github.com/kennedyzs383-ship-it/pixel-perfect-replica/pull/19)
 - Branch: `feat/cacador-whatsapp-dual-channel`
 - A PR permanece em draft, aberta e sem merge.
-- CI do commit `4803d990`: 7/7 ficheiros de testes, 41/41 testes e builds Vite/Nitro/Cloudflare concluídos com sucesso. Os commits posteriores ainda precisam de validação CI.
+- CI do commit `80752122`: 7/7 ficheiros de testes, 41/41 testes e builds Vite/Nitro/Cloudflare concluídos com sucesso.
 - O frontend não foi publicado. As três Edge Functions e as migrations indicadas acima foram aplicadas no projeto Supabase.
