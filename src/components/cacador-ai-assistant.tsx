@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { askCacadorLocalAI, loadCacadorLocalAI, type LocalAIProgress } from "@/lib/cacador-local-ai";
 import { askCacadorAI } from "@/lib/cacador-ai.functions";
-import { askCacadorWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
+import { askCacadorWithMcpFn, askCacadorWhatsAppWithMcpFn } from "@/lib/cacador-mcp-ai.functions";
 import { transcribeCacadorVoice } from "@/lib/cacador-voice.functions";
 import { executeCacadorMcpTool } from "@/lib/cacador-mcp.functions";
 import { askOllama, type CacadorProvider } from "@/lib/cacador-ai-providers";
@@ -193,7 +193,7 @@ export function CacadorAIAssistant() {
             const context = messagesRef.current.slice(-8).concat(customerLine).map(line =>
               (line.sender || (line.role === "user" ? "Cliente" : "Caçador")) + ": " + line.text
             ).join("\n");
-            const result = await askCacadorWithMcpFn({
+            const result = await askCacadorWhatsAppWithMcpFn({
               data: {
                 message: "Recebeste esta mensagem real de um cliente pelo WhatsApp. Número: +" + row.from_phone +
                   ". Nome: " + sender + ". Mensagem: " + incomingText +
