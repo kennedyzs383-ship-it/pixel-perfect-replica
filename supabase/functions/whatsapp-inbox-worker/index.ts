@@ -98,7 +98,7 @@ async function mcpRpc(config: McpServerConfig, method: string, params?: unknown,
   let payload: JsonRpcResponse = {};
   if (body.trim()) {
     if (response.headers.get("content-type")?.includes("text/event-stream")) {
-      const data = body.split(/\\r?\\n/).filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).filter(Boolean).at(-1);
+      const data = body.split(/\r?\n/).filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).filter(Boolean).at(-1);
       if (data) payload = JSON.parse(data) as JsonRpcResponse;
     } else payload = JSON.parse(body) as JsonRpcResponse;
   }
@@ -180,7 +180,7 @@ async function prepareDraft(message: string, context: string, customerPhone: str
   const proposals: ToolProposal[] = [];
   for (const call of Array.isArray(assistant?.tool_calls) ? assistant.tool_calls : []) {
     if (typeof call?.id !== "string" || typeof call?.function?.name !== "string") continue;
-    const match = /^cacador_tool_(\\d+)$/.exec(call.function.name);
+    const match = /^cacador_tool_(\d+)$/.exec(call.function.name);
     const index = match ? Number(match[1]) : -1;
     const tool = Number.isSafeInteger(index) && index >= 0 ? available[index] : undefined;
     if (!tool) continue;
@@ -190,7 +190,7 @@ async function prepareDraft(message: string, context: string, customerPhone: str
     const value = args as Record<string, unknown>;
     if (tool.serverId === "whatsapp-meta") {
       if (tool.toolName !== "send_text_message" || typeof value.to !== "string" ||
-          value.to.replace(/^\\+/, "") !== customerPhone.replace(/^\\+/, "") ||
+          value.to.replace(/^\+/, "") !== customerPhone.replace(/^\+/, "") ||
           typeof value.message !== "string" || !value.message.trim() || value.message.length > 4096) continue;
       value.to = customerPhone;
     }
