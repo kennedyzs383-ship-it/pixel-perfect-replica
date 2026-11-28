@@ -181,10 +181,17 @@ export function CacadorWhatsAppCalling() {
     });
   }, [speakToCustomer]);
 
-  const createPeer = useCallback(async () => {
+  const getIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
+    const result = await callControl({ action: "get_ice_servers" });
+    return Array.isArray(result.ice_servers)
+      ? result.ice_servers as RTCIceServer[]
+      : [{ urls: "stun:stun.l.google.com:19302" }];
+  }, [callControl]);
+
+  const createPeer = useCallback(async (iceServers: RTCIceServer[]) => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     streamRef.current = stream;
-    const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    const peer = new RTCPeerConnection({ iceServers });
     peerRef.current = peer;
     const audioContext = new AudioContext();
     audioContextRef.current = audioContext;
@@ -439,7 +446,8 @@ export function CacadorWhatsAppCalling() {
       if (!canStartCall) {
         throw new Error("A Meta ainda não confirma autorização para ligar a este cliente. Envia primeiro o pedido de autorização e aguarda a aprovação no WhatsApp.");
       }
-      const peer = await createPeer();
+      const iceServers = await getIceServers();
+      const peer = await createPeer(iceServers);
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
       await waitForIceGathering(peer);
@@ -460,7 +468,8 @@ export function CacadorWhatsAppCalling() {
     if (!incoming?.id || !incoming.session?.sdp) return;
     setBusy(true);
     try {
-      const peer = await createPeer();
+      const iceServers = await getIceServers();
+      const peer = await createPeer(iceServers);
       await peer.setRemoteDescription({ type: "offer", sdp: incoming.session.sdp });
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
