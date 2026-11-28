@@ -152,7 +152,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
             meta_timestamp: metaTimestamp(item.timestamp),
             phone_number_id: configuredPhoneNumberId,
             raw_message: { id: item.id, type, timestamp: typeof item.timestamp === "string" ? item.timestamp : null },
-          }, { onConflict: "owner_id,message_id", ignoreDuplicates: true });
+          }, { onConflict: "owner_id,phone_number_id,message_id", ignoreDuplicates: true });
         if (persistError) throw new Error("Could not persist incoming WhatsApp message: " + persistError.message);
         // Wake the durable inbox for every accepted message, including media-only
         // messages (audio, image, document, video, sticker). The inbox row is the
