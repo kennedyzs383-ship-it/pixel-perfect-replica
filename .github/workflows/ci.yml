@@ -30,3 +30,14 @@ jobs:
         run: deno check supabase/functions/whatsapp-inbox-worker/index.ts
       - name: Verificar webhook multi-tenant WhatsApp
         run: deno check supabase/functions/whatsapp-webhook/index.ts
+      - name: Preparar Supabase CLI para testes locais
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.81.3
+      - name: Iniciar Supabase local (sem ligação a projetos remotos)
+        run: supabase start
+      - name: Testar migrations e políticas RLS com pgTAP
+        run: supabase test db
+      - name: Parar Supabase local
+        if: always()
+        run: supabase stop --no-backup
