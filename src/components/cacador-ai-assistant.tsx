@@ -366,6 +366,24 @@ export function CacadorAIAssistant() {
     }
   };
 
+  const rejectMcpProposal = async (proposal: McpProposal) => {
+    if (proposal.inboxMessageId) {
+      const { data: rejected, error } = await supabase.rpc("set_whatsapp_inbox_draft_status", {
+        p_id: proposal.inboxMessageId, p_status: "rejected",
+      });
+      if (error || !rejected) {
+        setAiError(error?.message || "A proposta já não está pendente ou não pertence a esta conta.");
+        return;
+      }
+    }
+    setMcpProposals(current => current.filter(item => item.id !== proposal.id));
+    setMessages(previous => [...previous, {
+      role: "assistant",
+      conversationId: proposal.conversationId,
+      text: "A proposta " + proposal.toolName + " foi rejeitada. Nenhuma ação foi executada.",
+    }]);
+  };
+
   const approveMcpProposal = async (proposal: McpProposal) => {
     if (!window.confirm("Autorizar " + proposal.toolName + " no servidor " + proposal.serverName + "? Revê os argumentos antes de continuar.")) return;
     setBusy(true);
@@ -494,7 +512,10 @@ export function CacadorAIAssistant() {
         <b><Wrench size={13}/> {proposal.toolName} · {proposal.serverName}</b>
         {proposal.description && <p>{proposal.description}</p>}
         <pre>{JSON.stringify(proposal.arguments, null, 2)}</pre>
-        <button type="button" disabled={busy} onClick={() => void approveMcpProposal(proposal)}>Confirmar e executar</button>
+        <div className="hunter-ai-mcp-actions">
+          <button type="button" disabled={busy} onClick={() => void approveMcpProposal(proposal)}>Confirmar e executar</button>
+          <button type="button" className="hunter-ai-mcp-reject" disabled={busy} onClick={() => void rejectMcpProposal(proposal)}>Rejeitar proposta</button>
+        </div>
       </div>)}
     </div>}
     {aiError && <p className="hunter-ai-error" role="alert">{aiError}</p>}
