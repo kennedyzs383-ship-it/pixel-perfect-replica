@@ -115,6 +115,7 @@ O cliente MCP do Caçador inclui agora um servidor integrado identificado como `
 
 - `get_connection_status`: verifica a presença das configurações sem expor credenciais.
 - `send_text_message`: envia uma mensagem individual pela WhatsApp Cloud API. A interface exige confirmação humana antes da execução.
+- `send_audio_message`: converte texto em voz com o fornecedor TTS configurado, carrega o áudio na Meta e envia-o como mensagem de voz; também exige confirmação humana.
 
 ### Secrets do servidor da aplicação
 
@@ -141,12 +142,12 @@ O provider `whatsapp-meta` anuncia agora estas ferramentas de sinalização de c
 
 - `get_call_settings`: consulta as definições Calling do número; não ativa a funcionalidade.
 - `get_call_permission_status`: consulta a autorização do cliente (`user_wa_id`).
-- `request_call_permission`: envia o pedido interativo oficial de autorização; não liga automaticamente.
+- `request_call_permission`: envia o pedido interativo oficial de autorização dentro da janela de atendimento ou usa o template `CALL_PERMISSION_REQUEST` aprovado quando `WHATSAPP_CALL_PERMISSION_TEMPLATE_NAME` está configurado; não liga automaticamente.
 - `manage_voice_call`: suporta `connect`, `pre_accept`, `accept`, `reject` e `terminate`. A ação `connect` verifica primeiro a permissão na Meta. As ações que negociam áudio exigem SDP real produzido por uma stack WebRTC.
 
 ### Limite técnico explícito
 
-Esta entrega acrescenta o controlo/sinalização Meta no servidor MCP, mas ainda não inclui o motor de áudio WebRTC do Caçador nem o transporte dos eventos `field=calls`/SDP answer do webhook até uma sessão WebRTC ativa. Portanto, ainda não permite uma conversa de voz real ponta a ponta. Não enviar SDP inventado. Para completar chamadas reais, falta integrar o runtime WebRTC (microfone/altifalante, ICE e peer connection), entregar os eventos `calls` em tempo real à sessão e testar com um número Cloud API elegível. A coexistência do número Business atual não é considerada compatível com chamadas API; manter esse número sem alterações.
+O painel inclui agora o motor de áudio WebRTC no browser (microfone, altifalante, ICE e peer connection) e recebe os eventos `calls`/SDP answer pelo webhook. O áudio do cliente é segmentado por deteção de voz, transcrito, enviado ao cérebro MCP configurado e a resposta é sintetizada para a faixa de áudio da chamada. A conversa ainda é por segmentos STT/LLM/TTS, não full-duplex de baixa latência; requer teste real de qualidade, latência e interrupção. A coexistência do número Business atual não é considerada compatível com chamadas API; manter esse número sem alterações.
 
 As chamadas iniciadas pela empresa exigem autorização explícita do cliente, obtida através do pedido de permissão ou outra forma reconhecida pela Meta. O cliente pode recusar e a permissão pode expirar. Não iniciar chamadas sem autorização nem fazer chamadas em massa.
 
@@ -196,7 +197,7 @@ Na branch atual da PR #19 foi acrescentado o encaminhamento de mensagens recebid
 - Existe uma inbox persistente com deduplicação no servidor e recuperação quando o painel autenticado volta a abrir. Ainda não existe um worker autónomo que gere respostas enquanto o painel está fechado.
 - A deduplicação persistente usa a chave `(owner_id, message_id)`; o conjunto em memória no navegador serve apenas para evitar duplicação visual durante a sessão.
 - Texto e respostas interativas com texto são encaminhados ao Z Router. Áudio, imagem, vídeo e documentos são guardados com metadados, mas ainda não são descarregados nem interpretados. Agora ficam marcados como `unsupported`, não como processados.
-- A Edge Function alterada está versionada nesta branch, mas esta alteração ainda não foi publicada no Supabase. A versão ativa não deve ser considerada atualizada até um deploy autorizado.
+- A Edge Function `whatsapp-media` está publicada (ACTIVE). A versão de `whatsapp-webhook` mantém a persistência e o broadcast da inbox.
 - As respostas são preparadas pelo Z Router, mas não são enviadas automaticamente. A confirmação humana continua obrigatória.
 - O commit anterior da branch passou 36 testes e o build Vite/Nitro/Cloudflare. As alterações mais recentes estão a aguardar a conclusão do CI da PR.
 
@@ -207,10 +208,13 @@ Na branch atual da PR #19 foi acrescentado o encaminhamento de mensagens recebid
 - A migration `20261128000200_whatsapp_inbox_unsupported_media.sql` acrescenta o estado terminal `unsupported` e o RPC `skip_whatsapp_inbox_message`. Esta migration está apenas na branch; não foi aplicada ao Supabase.
 - O painel já não marca multimédia não interpretada como concluída com sucesso. A mensagem fica identificada como não suportada, com motivo explícito.
 - Não existe ainda worker autónomo de backend para gerar respostas com o painel fechado.
-- O fluxo de áudio de chamadas usa segmentos STT/TTS; não deve ser descrito como full-duplex de baixa latência.
+- O fluxo de áudio de chamadas usa deteção de atividade de voz e segmentos STT/TTS; não deve ser descrito como full-duplex de baixa latência.
+- O envio de mensagens de voz está implementado no provider MCP, mas depende de `CACADOR_AUDIO_API_KEY`, do serviço TTS e da aceitação do formato `audio/mpeg` pela Meta.
+- A chamada de permissão pode usar template aprovado fora da janela de atendimento, desde que sejam configuradas `WHATSAPP_CALL_PERMISSION_TEMPLATE_NAME` e `WHATSAPP_CALL_PERMISSION_TEMPLATE_LANGUAGE` no servidor.
 - O WebRTC usa STUN público; TURN e teste real entre dois números elegíveis continuam pendentes.
-- A branch ainda exige CI para os commits recentes e validação ponta a ponta com a Meta antes de se considerar concluída.
-- Não foi feito merge nem novo deploy de produção nesta etapa.
+- A validação CI do commit `b2008d3` passou 7/7 ficheiros de testes e builds Vite/Nitro/Cloudflare; os commits posteriores de áudio, seleção de clientes, templates e VAD ainda precisam de CI verde.
+- A migration `whatsapp_inbox_unsupported_media` foi aplicada e a Edge Function `whatsapp-media` foi publicada; `whatsapp-call-control` foi atualizada para versão 3 com suporte a template de permissão.
+- Não foi feito merge da PR #19 nem deploy do frontend.
 
 
 ## Recuperação segura de multimédia — 28-11-2026
@@ -223,4 +227,4 @@ Foi adicionada a Edge Function `whatsapp-media` na branch da PR:
 - Aceita apenas URLs HTTPS de hosts de media Meta conhecidos e bloqueia redirecionamentos.
 - Limita o download a 20 MB, aplica uma lista restrita de MIME types e devolve o ficheiro sem cache, com `nosniff`.
 - Não guarda cópias permanentes nem interpreta o conteúdo. A transcrição de áudio, OCR de imagens e análise de documentos continuam por implementar.
-- A função está apenas na branch; não foi publicada no Supabase. A validação do CI ainda é necessária.
+- A função foi publicada no Supabase como `whatsapp-media` versão 1 (ACTIVE). O fluxo de interpretação no painel ainda não está ligado.
