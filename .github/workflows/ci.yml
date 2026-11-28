@@ -37,7 +37,7 @@ jobs:
       - name: Iniciar Supabase local (sem ligação a projetos remotos)
         run: supabase start
       - name: Aplicar migrations apenas na base local descartável
-        run: supabase db reset --local
+        run: supabase db reset
       - name: Testar migrations e políticas RLS com pgTAP
         run: supabase test db
       - name: Parar Supabase local
