@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 type InboxRow = {
   id: string; owner_id: string; message_id: string; from_phone: string;
   contact_name: string | null; text_body: string | null; phone_number_id: string;
-  received_at: string; attempt_count: number;
+  received_at: string; attempt_count: number; processing_claim_token: string;
 };
 type ToolProposal = {
   id: string; serverId: string; serverName: string; toolName: string;
@@ -248,7 +248,7 @@ Deno.serve(async (request: Request) => {
         const { error } = await admin.from("whatsapp_inbox_messages").update({
           processing_status: "unsupported", processed_at: new Date().toISOString(), locked_at: null,
           last_error: "Autonomous worker currently processes text messages only; media remains safely stored.", updated_at: new Date().toISOString(),
-        }).eq("id", row.id).eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("processing_status", "processing");
+        }).eq("id", row.id).eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("processing_status", "processing").eq("processing_claim_token", row.processing_claim_token);
         if (error) throw error;
         unsupported++;
         continue;
@@ -272,7 +272,7 @@ Deno.serve(async (request: Request) => {
         processing_status: "processed",
         processed_at: new Date().toISOString(), locked_at: null, last_error: null,
         updated_at: new Date().toISOString(),
-      }).eq("id", row.id).eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("processing_status", "processing");
+      }).eq("id", row.id).eq("owner_id", ownerId).eq("phone_number_id", phoneNumberId).eq("processing_status", "processing").eq("processing_claim_token", row.processing_claim_token);
       if (saveError) throw saveError;
       processed++;
     } catch (error) {
