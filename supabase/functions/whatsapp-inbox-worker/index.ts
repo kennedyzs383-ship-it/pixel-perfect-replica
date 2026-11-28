@@ -40,7 +40,7 @@ type ChannelConfig = {
   brain_model: string | null; brain_base_url: string | null;
 };
 
-async function brainConfig(admin: ReturnType<typeof createClient>, channel: ChannelConfig) {
+async function brainConfig(admin: any, channel: ChannelConfig) {
   const { data: apiKey, error } = await admin.rpc("get_whatsapp_business_channel_secret", {
     p_channel_id: channel.id, p_secret_kind: "brain_api_key",
   });
