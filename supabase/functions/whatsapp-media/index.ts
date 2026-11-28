@@ -48,12 +48,28 @@ Deno.serve(async (request: Request): Promise<Response> => {
   let mediaId: string;
   let messageId: string;
   try {
-    // Enforce the limit even when a client omits Content-Length (for example, chunked requests).
-    const rawBody = await request.text();
-    if (new TextEncoder().encode(rawBody).byteLength > 16 * 1024) {
-      return json({ error: "Request body is too large." }, 413);
+    // Enforce the limit while streaming, including requests without Content-Length.
+    if (!request.body) return json({ error: "Request body is required." }, 400);
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bodyBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bodyBytes += value.byteLength;
+      if (bodyBytes > 16 * 1024) {
+        await reader.cancel();
+        return json({ error: "Request body is too large." }, 413);
+      }
+      chunks.push(value);
     }
-    const body: unknown = JSON.parse(rawBody);
+    const bodyBuffer = new Uint8Array(bodyBytes);
+    let bodyOffset = 0;
+    for (const chunk of chunks) {
+      bodyBuffer.set(chunk, bodyOffset);
+      bodyOffset += chunk.byteLength;
+    }
+    const body: unknown = JSON.parse(new TextDecoder().decode(bodyBuffer));
     if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Invalid request body." }, 400);
     const payload = body as Record<string, unknown>;
     mediaId = typeof payload.media_id === "string" ? payload.media_id : "";
