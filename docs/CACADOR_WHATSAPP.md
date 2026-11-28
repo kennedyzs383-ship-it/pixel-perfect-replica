@@ -156,3 +156,19 @@ O painel também permite rejeitar explicitamente uma proposta recuperada da inbo
 ### Concorrência e fencing de workers
 
 Cada reclamação autónoma recebe `processing_claim_token` (UUID) novo, gerado atomicamente pela RPC `claim_whatsapp_inbox_messages_for_worker`. Todas as gravações de conclusão, estado não suportado e retry do worker incluem simultaneamente `id`, `owner_id`, `phone_number_id`, `processing_status='processing'` e o token da reclamação. Se uma execução antiga ultrapassar o lease de cinco minutos e outra execução reclamar a mensagem, o token antigo deixa de corresponder e a execução atrasada não pode sobrescrever o estado novo. O token não é credencial de utilizador e nunca é exposto no frontend.
+
+
+## Fundação multi-tenant de canais (nova etapa na PR)
+
+A migration `20261128000400_whatsapp_multi_tenant_channels.sql` introduz `public.whatsapp_business_channels`:
+- Cada canal pertence a um `owner_id`, tem um `phone_number_id` globalmente único e o respetivo `waba_id`.
+- A tabela tem RLS e políticas de gestão limitadas ao proprietário autenticado.
+- Identificadores Meta e proprietário ficam imutáveis depois do registo. Um canal revogado é terminal.
+- Um proprietário pode registar, editar, pausar ou revogar canais, mas não pode ativá-los. A ativação exige fluxo confiável de verificação Meta, data de verificação e credenciais de canal.
+- As chaves do cérebro e o token de acesso Meta são guardados no Supabase Vault. A tabela contém apenas referências opacas. O RPC de gravação valida `auth.uid()`; o RPC de leitura do segredo só permite `service_role`.
+- O webhook de mensagens recebidas resolve o canal ativo pelo `metadata.phone_number_id` e confirma também que o `entry.id` corresponde ao `waba_id` registado antes de gravar a mensagem para o proprietário.
+- O CI verifica agora o tipo da Edge Function do webhook.
+
+**Limites desta etapa:** o worker autónomo e o executor MCP ainda usam a configuração antiga de um proprietário/número por projeto. O encaminhamento de eventos de chamadas e o endpoint de controlo de chamadas também continuam ligados ao canal legado. Portanto, esta migration é a fundação de registo e encaminhamento da inbox, não declara multi-tenant completo nem ativa um segundo canal para atendimento automático. A próxima etapa deve migrar worker, envio MCP, chamadas e seleção do canal na interface para usar `channel_id` e os segredos isolados do Vault, com testes de isolamento entre dois proprietários.
+
+A migration e o novo encaminhamento do webhook estão apenas na branch/PR. Não foram aplicados ao projeto Supabase nem publicados. Antes de aplicar, executar `supabase test db` no ambiente de validação e verificar os privilégios do Vault e os triggers. Supabase recomenda RLS em todas as tabelas expostas e testes pgTAP para confirmar as regras de acesso. 
