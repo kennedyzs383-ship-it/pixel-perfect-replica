@@ -31,7 +31,7 @@ function whatsappBrainConfig(): BrainConfig {
     let url: URL;
     try { url = new URL(endpoint); } catch { throw new Error('CACADOR_WHATSAPP_BRAIN_BASE_URL não é um URL válido.'); }
     if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && url.hostname === 'localhost')) throw new Error('O endpoint do cérebro WhatsApp tem de usar HTTPS.');
-    return { provider, apiKey, endpoint: url.toString().replace(/\\/$/, '') + '/chat/completions', model, label: 'Provider OpenAI-compatible' };
+    return { provider, apiKey, endpoint: url.toString().replace(/\/$/, '') + '/chat/completions', model, label: 'Provider OpenAI-compatible' };
   }
   throw new Error('CACADOR_WHATSAPP_BRAIN_PROVIDER inválido. Usa zrouter, lovable ou openai-compatible.');
 }
