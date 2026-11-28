@@ -162,6 +162,7 @@ Cada reclamação autónoma recebe `processing_claim_token` (UUID) novo, gerado 
 
 A migration `20261128000400_whatsapp_multi_tenant_channels.sql` introduz `public.whatsapp_business_channels`:
 - Cada canal pertence a um `owner_id`, tem um `phone_number_id` globalmente único e o respetivo `waba_id`.
+- A deduplicação da inbox passa a usar `owner_id + phone_number_id + message_id`, para que a mesma conta possa receber eventos de vários números sem colidir.
 - A tabela tem RLS e políticas de gestão limitadas ao proprietário autenticado.
 - Identificadores Meta e proprietário ficam imutáveis depois do registo. Um canal revogado é terminal.
 - Um proprietário pode registar, editar, pausar ou revogar canais, mas não pode ativá-los. A ativação exige fluxo confiável de verificação Meta, data de verificação e credenciais de canal.
