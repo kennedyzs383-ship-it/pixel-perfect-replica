@@ -192,7 +192,7 @@ export function CacadorAIAssistant() {
           // Keep each customer's conversation isolated. The assistant panel also
           // contains local chats and messages from other WhatsApp numbers; none of
           // those may be sent to this customer's AI request.
-          const conversationId = "whatsapp:" + row.from_phone;
+          const conversationId = "whatsapp:" + (row.phone_number_id || "default") + ":" + row.from_phone;
           const customerLine: ChatLine = {
             role: "user",
             sender: "WhatsApp · " + sender,
