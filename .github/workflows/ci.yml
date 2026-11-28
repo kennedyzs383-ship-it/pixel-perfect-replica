@@ -22,3 +22,9 @@ jobs:
         run: bun run test
       - name: Construir aplicação
         run: bun run build
+      - name: Preparar Deno para Edge Functions
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verificar worker autónomo WhatsApp
+        run: deno check supabase/functions/whatsapp-inbox-worker/index.ts
