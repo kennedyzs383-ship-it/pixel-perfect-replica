@@ -95,3 +95,53 @@ O número de origem tem de ser elegível para Calling e estar registado na Cloud
 
 ### Aprovação e resposta pós-execução
 As propostas MCP originadas numa mensagem WhatsApp preservam a origem e o identificador da conversa. Depois da aprovação humana e execução da ferramenta, o resumo do resultado volta a usar o cérebro configurado exclusivamente para WhatsApp (em vez do cérebro global) e recebe apenas o histórico daquele cliente/canal. Propostas adicionais continuam pendentes de aprovação; nenhuma ação subsequente é executada automaticamente.
+
+## Processamento autónomo da inbox (novo, em validação na PR)
+
+- whatsapp-inbox-worker reclama mensagens com RPC atómico e FOR UPDATE SKIP LOCKED; o painel aberto já não é necessário para iniciar o processamento.
+- Cada execução está limitada ao WHATSAPP_OWNER_ID e ao WHATSAPP_PHONE_NUMBER_ID configurados no servidor. O histórico enviado ao cérebro é filtrado simultaneamente por proprietário, número Business e número do cliente.
+- O worker usa a mesma seleção isolada do cérebro WhatsApp: CACADOR_WHATSAPP_BRAIN_PROVIDER=zrouter|lovable|openai-compatible. Não altera o cérebro global.
+- O worker só prepara texto e propostas. Não executa ferramentas MCP nem chama a Meta para enviar mensagens ou iniciar chamadas.
+- As propostas ficam persistidas em assistant_proposals, com o texto em assistant_draft e estado pending_approval. Ao abrir o painel autenticado, as propostas são recuperadas e apresentadas para aprovação.
+- A aprovação é registada por RPC que valida auth.uid() contra owner_id. Só depois a interface executa a ferramenta MCP; se a execução falhar antes de concluir, a proposta regressa a pending_approval.
+- Mensagens multimédia sem texto continuam guardadas; o worker marca-as unsupported em vez de fingir que foram interpretadas. A transcrição de áudio continua no fluxo já existente do painel.
+- Falhas transitórias usam backoff exponencial; mensagens com oito tentativas passam a failed.
+
+### Configuração do worker — ainda não ativada
+
+Secrets adicionais no ambiente das Edge Functions:
+
+- CACADOR_WHATSAPP_WORKER_SECRET: segredo aleatório forte, usado apenas para autenticar o cron.
+- WHATSAPP_OWNER_ID e WHATSAPP_PHONE_NUMBER_ID: identificam o proprietário e o canal Business que o worker pode processar.
+- As secrets do cérebro WhatsApp já documentadas acima.
+
+Para agendar, ativar pg_cron, pg_net e Vault no projeto de validação. Guardar o URL do projeto e o mesmo segredo do worker no Vault (não no Git nem no frontend):
+
+```sql
+select vault.create_secret('https://PROJECT_REF.supabase.co', 'cacador_project_url');
+select vault.create_secret('SEGREDO_FORTE_DO_WORKER', 'cacador_whatsapp_worker_secret');
+
+select cron.schedule(
+  'cacador-whatsapp-inbox-worker',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'cacador_project_url')
+      || '/functions/v1/whatsapp-inbox-worker',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cacador-worker-secret',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'cacador_whatsapp_worker_secret')
+    ),
+    body := '{"source":"pg_cron"}'::jsonb,
+    timeout_milliseconds := 120000
+  );
+  $$
+);
+```
+
+O segredo também tem de ser configurado nas secrets das Edge Functions com o nome CACADOR_WHATSAPP_WORKER_SECRET. Não usar a chave service_role como segredo do cron. Para suspender o agendamento: `select cron.unschedule('cacador-whatsapp-inbox-worker');`.
+
+**Limite atual:** esta configuração do worker é deliberadamente scoped a um proprietário e um número Business por projeto, conforme o modelo de configuração WhatsApp já existente. Não é ainda um serviço multi-tenant com vários proprietários Meta independentes no mesmo projeto. O cron só deve ser ativado depois de a migration e a Edge Function serem instaladas num ambiente de validação e de as secrets serem configuradas.
+
+A migration 20261128000300_whatsapp_autonomous_worker.sql, a Edge Function whatsapp-inbox-worker e a recuperação de propostas na interface fazem parte apenas desta branch/PR. Não foram aplicadas ao projeto Supabase ativo nem publicadas.
