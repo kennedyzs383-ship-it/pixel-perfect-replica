@@ -135,8 +135,10 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
             raw_message: { id: item.id, type, timestamp: typeof item.timestamp === "string" ? item.timestamp : null },
           }, { onConflict: "owner_id,message_id", ignoreDuplicates: true });
         if (persistError) throw new Error("Could not persist incoming WhatsApp message: " + persistError.message);
+        // Wake the durable inbox for every accepted message, including media-only
+        // messages (audio, image, document, video, sticker). The inbox row is the
+        // source of truth; the broadcast deliberately carries no media bytes.
         const messageText = messageTextFrom(item, type);
-        if (!messageText.trim()) continue;
         const contactName = contactNameFrom(contacts, item.from);
         const channel = supabase.channel(topic, { config: { private: true } });
         const result = await channel.send({
