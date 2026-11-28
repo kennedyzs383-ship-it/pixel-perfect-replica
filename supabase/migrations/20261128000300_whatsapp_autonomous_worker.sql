@@ -99,3 +99,61 @@ $$;
 
 revoke all on function public.set_whatsapp_inbox_draft_status(uuid, text) from public, anon;
 grant execute on function public.set_whatsapp_inbox_draft_status(uuid, text) to authenticated;
+
+
+-- Fence stale workers: only the holder of the current claim token may write a result.
+alter table public.whatsapp_inbox_messages
+  add column if not exists processing_claim_token uuid;
+
+create index if not exists whatsapp_inbox_claim_token_idx
+  on public.whatsapp_inbox_messages (processing_claim_token)
+  where processing_claim_token is not null;
+
+create or replace function public.claim_whatsapp_inbox_messages_for_worker(
+  p_owner_id uuid,
+  p_phone_number_id text,
+  p_limit integer default 10
+)
+returns setof public.whatsapp_inbox_messages
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if p_owner_id is null or p_phone_number_id is null or length(p_phone_number_id) not between 5 and 30 then
+    raise exception 'A valid owner and Business phone number are required' using errcode = '22023';
+  end if;
+  if p_limit < 1 or p_limit > 20 then
+    raise exception 'p_limit must be between 1 and 20' using errcode = '22023';
+  end if;
+
+  return query
+  with candidates as (
+    select id
+    from public.whatsapp_inbox_messages
+    where owner_id = p_owner_id
+      and phone_number_id = p_phone_number_id
+      and draft_status = 'none'
+      and next_attempt_at <= now()
+      and (
+        processing_status = 'pending'
+        or (processing_status = 'processing' and locked_at < now() - interval '5 minutes')
+      )
+    order by received_at asc
+    for update skip locked
+    limit p_limit
+  )
+  update public.whatsapp_inbox_messages m
+  set processing_status = 'processing',
+      attempt_count = m.attempt_count + 1,
+      locked_at = now(),
+      processing_claim_token = gen_random_uuid(),
+      updated_at = now()
+  from candidates
+  where m.id = candidates.id
+  returning m.*;
+end;
+$$;
+
+revoke all on function public.claim_whatsapp_inbox_messages_for_worker(uuid, text, integer) from public, anon, authenticated;
+grant execute on function public.claim_whatsapp_inbox_messages_for_worker(uuid, text, integer) to service_role;
