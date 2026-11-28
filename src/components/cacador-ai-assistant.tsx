@@ -106,8 +106,12 @@ export function CacadorAIAssistant() {
           };
           if (!row.text_body?.trim()) {
             setMessages(previous => [...previous, customerLine].slice(-100));
-            await supabase.rpc("complete_whatsapp_inbox_message", { p_id: row.id });
-            setAiError("Foi recebida uma mensagem WhatsApp do tipo " + row.message_type + ". A mensagem ficou guardada, mas este tipo de conteúdo ainda não é interpretado pelo Caçador.");
+            const { error: skipError } = await supabase.rpc("skip_whatsapp_inbox_message", {
+              p_id: row.id,
+              p_reason: "Mensagem " + row.message_type + " guardada; descodificação e interpretação de multimédia ainda não estão disponíveis.",
+            });
+            if (skipError) throw skipError;
+            setAiError("Foi recebida uma mensagem WhatsApp do tipo " + row.message_type + ". Ficou guardada e marcada como não suportada; não foi apresentada como processada nem enviada ao Z Router.");
             continue;
           }
 
