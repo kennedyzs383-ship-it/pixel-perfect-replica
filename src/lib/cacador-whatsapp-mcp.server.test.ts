@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { callWhatsAppMcpTool } from './cacador-whatsapp-mcp.server';
+import { synthesizeCacadorSpeech } from './cacador-voice.server';
+
+vi.mock('./cacador-voice.server', () => ({
+  synthesizeCacadorSpeech: vi.fn().mockResolvedValue({ audioBase64: 'AQIDBAUGBwgJCgsMDQ4PEA==', mimeType: 'audio/mpeg' }),
+}));
 
 const fetchMock = vi.fn();
 const callInput = {
@@ -57,5 +62,41 @@ describe('WhatsApp Calling permission gate', () => {
     expect(result.isError).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[1][0])).toContain('/123456789012345/calls');
+  });
+});
+
+
+describe('WhatsApp voice messages', () => {
+  it('synthesizes and uploads audio before sending it to the customer', async () => {
+    fetchMock
+      .mockResolvedValueOnce(Response.json({ id: 'media-123' }))
+      .mockResolvedValueOnce(Response.json({ messages: [{ id: 'wamid-audio-123' }] }));
+
+    const result = await callWhatsAppMcpTool('send_audio_message', {
+      to: '+244923000000',
+      text: 'Olá, recebemos o teu pedido.',
+    });
+
+    expect(synthesizeCacadorSpeech).toHaveBeenCalledWith({ text: 'Olá, recebemos o teu pedido.' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/123456789012345/media');
+    expect(fetchMock.mock.calls[0][1]?.body).toBeInstanceOf(FormData);
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/123456789012345/messages');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({
+      messaging_product: 'whatsapp',
+      to: '244923000000',
+      type: 'audio',
+      audio: { id: 'media-123' },
+    });
+    expect(result.content).toContain('wamid-audio-123');
+  });
+
+  it('does not send audio if Meta rejects the media upload', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ error: { message: 'Unsupported media' } }, { status: 400 }));
+    await expect(callWhatsAppMcpTool('send_audio_message', {
+      to: '+244923000000',
+      text: 'Olá.',
+    })).rejects.toThrow('Unsupported media');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
