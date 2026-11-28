@@ -428,6 +428,15 @@ export function CacadorWhatsAppCalling() {
       if (!userId) throw new Error("Inicia sessão no Caçador.");
       if (!realtimeReady) throw new Error("O canal seguro de sinalização ainda não está ligado. Aguarda antes de iniciar a chamada.");
       if (!/^\+?[1-9]\d{7,14}$/.test(phone.trim())) throw new Error("Indica o número do cliente com indicativo internacional.");
+      // Check consent before opening the microphone or creating a WebRTC offer.
+      const permission = await callControl({ action: "get_call_permission_status", to: phone.trim() });
+      const canStartCall = Array.isArray(permission.actions) &&
+        permission.actions.some((item) => item && typeof item === "object" &&
+          (item as { action_name?: unknown }).action_name === "start_call" &&
+          (item as { can_perform_action?: unknown }).can_perform_action === true);
+      if (!canStartCall) {
+        throw new Error("A Meta ainda não confirma autorização para ligar a este cliente. Envia primeiro o pedido de autorização e aguarda a aprovação no WhatsApp.");
+      }
       const peer = await createPeer();
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
