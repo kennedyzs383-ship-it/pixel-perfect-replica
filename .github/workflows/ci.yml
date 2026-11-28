@@ -28,3 +28,5 @@ jobs:
           deno-version: v2.x
       - name: Verificar worker autónomo WhatsApp
         run: deno check supabase/functions/whatsapp-inbox-worker/index.ts
+      - name: Verificar webhook multi-tenant WhatsApp
+        run: deno check supabase/functions/whatsapp-webhook/index.ts
