@@ -53,7 +53,7 @@ function brainConfig() {
     if (!apiKey || !baseUrl || !model) throw new Error("OpenAI-compatible WhatsApp brain configuration is incomplete");
     const url = new URL(baseUrl);
     if (url.protocol !== "https:") throw new Error("WhatsApp brain endpoint must use HTTPS");
-    return { apiKey, endpoint: url.toString().replace(/\\/$/, "") + "/chat/completions", model };
+    return { apiKey, endpoint: url.toString().replace(/\/$/, "") + "/chat/completions", model };
   }
   throw new Error("Unsupported CACADOR_WHATSAPP_BRAIN_PROVIDER");
 }
@@ -100,7 +100,7 @@ async function prepareDraft(message: string, context: string, customerPhone: str
     try { args = JSON.parse(call.function.arguments || "{}"); } catch { continue; }
     if (!args || typeof args !== "object" || Array.isArray(args)) continue;
     const value = args as Record<string, unknown>;
-    if (typeof value.to !== "string" || value.to.replace(/^\\+/, "") !== customerPhone.replace(/^\\+/, "") || typeof value.message !== "string" || !value.message.trim() || value.message.length > 4096) continue;
+    if (typeof value.to !== "string" || value.to.replace(/^\+/, "") !== customerPhone.replace(/^\+/, "") || typeof value.message !== "string" || !value.message.trim() || value.message.length > 4096) continue;
     proposals.push({
       id: call.id, serverId: "whatsapp-meta", serverName: "WhatsApp Cloud API · MCP integrado",
       toolName: "send_text_message", description: "Proposta gerada autonomamente; exige aprovação humana.",
