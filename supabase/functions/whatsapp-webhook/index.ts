@@ -10,7 +10,7 @@ type ActiveWhatsAppChannel = {
 };
 
 async function resolveActiveWhatsAppChannel(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   phoneNumberId: string,
 ): Promise<ActiveWhatsAppChannel | null> {
   if (!/^\\d{5,30}$/.test(phoneNumberId)) return null;
@@ -123,11 +123,11 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
       const value = change.value;
       const metadata = isRecord(value.metadata) ? value.metadata : null;
       const phoneNumberId = typeof metadata?.phone_number_id === "string" ? metadata.phone_number_id : "";
-      const channel = await resolveActiveWhatsAppChannel(supabase, phoneNumberId);
+      const businessChannel = await resolveActiveWhatsAppChannel(supabase, phoneNumberId);
       // Meta's signed webhook must identify the same WABA as the registered channel.
-      if (!channel || typeof entry.id !== "string" || channel.waba_id !== entry.id) continue;
-      const ownerId = channel.owner_id;
-      const configuredPhoneNumberId = channel.phone_number_id;
+      if (!businessChannel || typeof entry.id !== "string" || businessChannel.waba_id !== entry.id) continue;
+      const ownerId = businessChannel.owner_id;
+      const configuredPhoneNumberId = businessChannel.phone_number_id;
       const incoming = Array.isArray(value.messages) ? value.messages : [];
       const contacts = Array.isArray(value.contacts) ? value.contacts : [];
       const topic = "whatsapp-calls:" + ownerId;
@@ -165,7 +165,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
           event: "incoming_message",
           payload: {
             message_id: item.id,
-            channel_id: channel.id,
+            channel_id: businessChannel.id,
             from: item.from,
             timestamp: typeof item.timestamp === "string" ? item.timestamp : null,
             message_type: type,
