@@ -137,3 +137,27 @@ describe('WhatsApp call permission requests', () => {
     });
   });
 });
+
+
+describe('WhatsApp approved templates', () => {
+  it('sends an approved template with ordered body parameters', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ messages: [{ id: 'wamid-template-1' }] }));
+    const result = await callWhatsAppMcpTool('send_template_message', {
+      to: '+244923000000',
+      template_name: 'website_offer',
+      language: 'pt_PT',
+      body_parameters: ['Maria', 'website profissional'],
+    });
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(payload).toMatchObject({
+      type: 'template',
+      to: '244923000000',
+      template: {
+        name: 'website_offer',
+        language: { code: 'pt_PT' },
+        components: [{ type: 'body', parameters: [{ type: 'text', text: 'Maria' }, { type: 'text', text: 'website profissional' }] }],
+      },
+    });
+    expect(result.content).toContain('wamid-template-1');
+  });
+});
