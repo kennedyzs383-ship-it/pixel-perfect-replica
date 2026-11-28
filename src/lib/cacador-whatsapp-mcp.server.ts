@@ -53,7 +53,7 @@ export function listWhatsAppMcpTools() {
     },
     {
       name: 'request_call_permission',
-      description: 'Envia ao cliente um pedido interativo oficial para autorizar uma chamada WhatsApp. Não inicia a chamada.',
+      description: 'Envia ao cliente um pedido oficial para autorizar uma chamada WhatsApp. Usa o template CALL_PERMISSION_REQUEST aprovado quando configurado; caso contrário, envia a mensagem interativa dentro da janela de atendimento. Não inicia a chamada.',
       inputSchema: { type: 'object', properties: { to: { type: 'string' }, message: { type: 'string', maxLength: 1024 } }, required: ['to'], additionalProperties: false },
     },
     {
@@ -162,20 +162,15 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
     const { phoneNumberId } = config();
     if (!phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
     const to = parsed.data.to.replace(/^\+/, '');
-    const result = await graphRequest(`${phoneNumberId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'interactive',
-        interactive: {
-          type: 'call_permission_request',
-          body: { text: parsed.data.message },
-          action: { name: 'call_permission_request' },
-        },
-      }),
-    });
+    const approvedTemplate = process.env.WHATSAPP_CALL_PERMISSION_TEMPLATE_NAME?.trim();
+    const templateLanguage = process.env.WHATSAPP_CALL_PERMISSION_TEMPLATE_LANGUAGE?.trim() || 'pt_PT';
+    const permissionMessage = approvedTemplate
+      ? { messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'template', template: { name: approvedTemplate, language: { code: templateLanguage } } }
+      : { messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'interactive', interactive: { type: 'call_permission_request', body: { text: parsed.data.message }, action: { name: 'call_permission_request' } } };
+    if (approvedTemplate && (!/^[a-z0-9_]{1,512}$/.test(approvedTemplate) || !/^[a-z]{2}_[A-Z]{2}$/.test(templateLanguage))) {
+      throw new Error('O nome ou idioma do template de autorização de chamada está inválido nas secrets do servidor.');
+    }
+    const result = await graphRequest(phoneNumberId + '/messages', { method: 'POST', body: JSON.stringify(permissionMessage) });
     return { isError: false, content: `Pedido de autorização de chamada enviado à Meta para ${to}. A chamada não foi iniciada. Aguarda a resposta explícita do cliente. ${result.messages?.[0]?.id ? `ID: ${result.messages[0].id}` : ''}` };
   }
 
