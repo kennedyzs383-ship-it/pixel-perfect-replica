@@ -21,7 +21,11 @@ create table if not exists public.whatsapp_business_channels (
   unique (owner_id, id),
   check (
     brain_base_url is null
-    or (brain_base_url ~ '^https://' and length(brain_base_url) <= 500)
+    or (brain_base_url ~ '^https://' and length(brain_base_url) <= 500 and position('@' in brain_base_url) = 0)
+  ),
+  check (
+    (brain_provider <> 'openai-compatible' or (brain_model is not null and brain_base_url is not null))
+    and (brain_provider <> 'lovable' or brain_model is not null)
   ),
   check (
     brain_api_key_secret_name is null
@@ -32,6 +36,13 @@ create table if not exists public.whatsapp_business_channels (
     or meta_access_token_secret_name ~ '^cacador_wa_meta_[a-f0-9-]{36}$'
   )
 );
+
+-- Message IDs are deduplicated inside the owner + Business channel boundary.
+-- The previous owner/message constraint was too broad for multiple channels.
+alter table public.whatsapp_inbox_messages
+  drop constraint if exists whatsapp_inbox_messages_owner_id_message_id_key;
+create unique index if not exists whatsapp_inbox_owner_channel_message_uidx
+  on public.whatsapp_inbox_messages (owner_id, phone_number_id, message_id);
 
 create index if not exists whatsapp_business_channels_owner_idx
   on public.whatsapp_business_channels (owner_id, created_at desc);
