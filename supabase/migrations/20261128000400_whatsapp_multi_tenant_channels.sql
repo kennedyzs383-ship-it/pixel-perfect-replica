@@ -218,7 +218,7 @@ begin
   if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
     raise exception 'Service role required' using errcode = '42501';
   end if;
-  if p_secret_kind not in ('brain_api_key', 'meta_access_token') then
+  if p_secret_kind is null or p_secret_kind not in ('brain_api_key', 'meta_access_token') then
     raise exception 'Unsupported channel secret type' using errcode = '22023';
   end if;
 
