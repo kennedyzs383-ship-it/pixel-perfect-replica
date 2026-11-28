@@ -234,7 +234,28 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "POST") {
     if (!appSecret) return json({ error: "Webhook is not configured" }, 503);
 
-    const rawBody = await request.text();
+    // Meta webhook payloads are small; cap memory use before HMAC verification.
+    if (!request.body) return json({ error: "Request body is required" }, 400);
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bodyBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bodyBytes += value.byteLength;
+      if (bodyBytes > 2 * 1024 * 1024) {
+        await reader.cancel();
+        return json({ error: "Webhook payload is too large" }, 413);
+      }
+      chunks.push(value);
+    }
+    const rawBytes = new Uint8Array(bodyBytes);
+    let bodyOffset = 0;
+    for (const chunk of chunks) {
+      rawBytes.set(chunk, bodyOffset);
+      bodyOffset += chunk.byteLength;
+    }
+    const rawBody = new TextDecoder().decode(rawBytes);
     const valid = await verifyMetaSignature(
       rawBody,
       request.headers.get("x-hub-signature-256"),
