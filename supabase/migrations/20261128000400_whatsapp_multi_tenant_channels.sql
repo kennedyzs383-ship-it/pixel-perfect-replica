@@ -71,6 +71,20 @@ begin
     end if;
   end if;
 
+  if tg_op = 'UPDATE' and old.status = 'revoked' and new.status <> 'revoked' then
+    raise exception 'A revoked WhatsApp channel cannot be reactivated; register a new channel'
+      using errcode = '42501';
+  end if;
+
+  if new.status = 'active' and (
+    new.verified_at is null
+    or new.meta_access_token_secret_name is null
+    or new.brain_api_key_secret_name is null
+  ) then
+    raise exception 'Activation requires Meta verification and both channel credentials'
+      using errcode = '23514';
+  end if;
+
   if new.status = 'active'
     and (tg_op = 'INSERT' or old.status is distinct from 'active')
     and request_role <> 'service_role' then
@@ -91,6 +105,7 @@ begin
     if tg_op = 'UPDATE' and (
       new.brain_api_key_secret_name is distinct from old.brain_api_key_secret_name
       or new.meta_access_token_secret_name is distinct from old.meta_access_token_secret_name
+      or new.verified_at is distinct from old.verified_at
     ) then
       raise exception 'Channel secret references cannot be modified directly'
         using errcode = '42501';
@@ -127,7 +142,7 @@ begin
   if v_owner is null then
     raise exception 'Authentication required' using errcode = '28000';
   end if;
-  if p_secret_kind not in ('brain_api_key', 'meta_access_token') then
+  if p_secret_kind is null or p_secret_kind not in ('brain_api_key', 'meta_access_token') then
     raise exception 'Unsupported channel secret type' using errcode = '22023';
   end if;
   if p_secret is null or length(p_secret) < 12 or length(p_secret) > 8192 then
