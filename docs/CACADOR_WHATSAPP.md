@@ -99,7 +99,7 @@ As propostas MCP originadas numa mensagem WhatsApp preservam a origem e o identi
 ## Processamento autónomo da inbox (novo, em validação na PR)
 
 - whatsapp-inbox-worker reclama mensagens com RPC atómico e FOR UPDATE SKIP LOCKED; o painel aberto já não é necessário para iniciar o processamento.
-- Cada execução está limitada ao WHATSAPP_OWNER_ID e ao WHATSAPP_PHONE_NUMBER_ID configurados no servidor. O histórico enviado ao cérebro é filtrado simultaneamente por proprietário, número Business e número do cliente.
+- Cada execução percorre canais ativos registados em whatsapp_business_channels e reclama mensagens por proprietário + número Business. O histórico enviado ao cérebro é filtrado também pelo número do cliente.
 - O worker usa a mesma seleção isolada do cérebro WhatsApp: CACADOR_WHATSAPP_BRAIN_PROVIDER=zrouter|lovable|openai-compatible. Não altera o cérebro global.
 - O worker só prepara texto e propostas. Não executa ferramentas MCP nem chama a Meta para enviar mensagens ou iniciar chamadas.
 - As propostas ficam persistidas em assistant_proposals, com o texto em assistant_draft e estado pending_approval. Ao abrir o painel autenticado, as propostas são recuperadas e apresentadas para aprovação.
@@ -112,8 +112,8 @@ As propostas MCP originadas numa mensagem WhatsApp preservam a origem e o identi
 Secrets adicionais no ambiente das Edge Functions:
 
 - CACADOR_WHATSAPP_WORKER_SECRET: segredo aleatório forte, usado apenas para autenticar o cron.
-- WHATSAPP_OWNER_ID e WHATSAPP_PHONE_NUMBER_ID: identificam o proprietário e o canal Business que o worker pode processar.
-- As secrets do cérebro WhatsApp já documentadas acima.
+- Os canais ativos e os respetivos proprietários/números Business são lidos de whatsapp_business_channels.
+- A credencial do cérebro de cada canal é resolvida no Vault pelo RPC server-only; não usar uma chave global partilhada entre proprietários.
 
 Para agendar, ativar pg_cron, pg_net e Vault no projeto de validação. Guardar o URL do projeto e o mesmo segredo do worker no Vault (não no Git nem no frontend):
 
@@ -142,7 +142,7 @@ select cron.schedule(
 
 O segredo também tem de ser configurado nas secrets das Edge Functions com o nome CACADOR_WHATSAPP_WORKER_SECRET. Não usar a chave service_role como segredo do cron. Para suspender o agendamento: `select cron.unschedule('cacador-whatsapp-inbox-worker');`.
 
-**Limite atual:** esta configuração do worker é deliberadamente scoped a um proprietário e um número Business por projeto, conforme o modelo de configuração WhatsApp já existente. Não é ainda um serviço multi-tenant com vários proprietários Meta independentes no mesmo projeto. O cron só deve ser ativado depois de a migration e a Edge Function serem instaladas num ambiente de validação e de as secrets serem configuradas.
+**Limite atual:** o worker já percorre canais ativos de vários proprietários, mas a gestão/onboarding de canais, executor MCP, chamadas/controlo de chamadas e seleção de canal na interface ainda não estão integralmente multi-tenant. O cron só deve ser ativado depois de migrations e Edge Functions serem instaladas num ambiente de validação e as credenciais de cada canal serem configuradas.
 
 A migration 20261128000300_whatsapp_autonomous_worker.sql, a Edge Function whatsapp-inbox-worker e a recuperação de propostas na interface fazem parte apenas desta branch/PR. Não foram aplicadas ao projeto Supabase ativo nem publicadas.
 
