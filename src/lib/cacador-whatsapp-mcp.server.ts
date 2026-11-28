@@ -26,6 +26,12 @@ const SendAudioSchema = z.object({
   to: CustomerSchema,
   text: z.string().trim().min(1).max(4000),
 });
+const SendTemplateSchema = z.object({
+  to: CustomerSchema,
+  template_name: z.string().trim().regex(/^[a-z0-9_]{1,512}$/, 'Indica o nome válido de um template aprovado na Meta.'),
+  language: z.string().trim().regex(/^[a-z]{2}_[A-Z]{2}$/, 'Indica o idioma do template, por exemplo pt_PT.').default('pt_PT'),
+  body_parameters: z.array(z.string().trim().max(1024)).max(10).optional(),
+});
 
 function config() {
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -82,6 +88,21 @@ export function listWhatsAppMcpTools() {
           message: { type: 'string', minLength: 1, maxLength: 4096, description: 'Texto da mensagem.' },
         },
         required: ['to', 'message'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'send_template_message',
+      description: 'Envia um template WhatsApp previamente aprovado pela Meta. Útil para iniciar conversas fora da janela de 24 horas; requer aprovação humana e consentimento adequado.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Número do destinatário em formato internacional.' },
+          template_name: { type: 'string', description: 'Nome exato do template aprovado na Meta.' },
+          language: { type: 'string', description: 'Código do idioma aprovado, por exemplo pt_PT.' },
+          body_parameters: { type: 'array', items: { type: 'string', maxLength: 1024 }, maxItems: 10, description: 'Valores para as variáveis {{1}}, {{2}}, ... do corpo, pela ordem.' },
+        },
+        required: ['to', 'template_name'],
         additionalProperties: false,
       },
     },
@@ -194,6 +215,36 @@ export async function callWhatsAppMcpTool(toolName: string, args: Record<string,
     if (parsed.data.biz_opaque_callback_data) payload.biz_opaque_callback_data = parsed.data.biz_opaque_callback_data;
     const result = await graphRequest(`${phoneNumberId}/calls`, { method: 'POST', body: JSON.stringify(payload) });
     return { isError: false, content: JSON.stringify(result).slice(0, 6000) };
+  }
+
+  if (toolName === 'send_template_message') {
+    const parsed = SendTemplateSchema.safeParse(args);
+    if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || 'Argumentos do template inválidos.');
+    const { phoneNumberId } = config();
+    if (!phoneNumberId || !/^\d{5,30}$/.test(phoneNumberId)) throw new Error('Define WHATSAPP_PHONE_NUMBER_ID nas secrets do servidor.');
+    const to = parsed.data.to.replace(/^\+/, '');
+    const template: Record<string, unknown> = {
+      name: parsed.data.template_name,
+      language: { code: parsed.data.language },
+    };
+    if (parsed.data.body_parameters?.length) {
+      template.components = [{
+        type: 'body',
+        parameters: parsed.data.body_parameters.map(text => ({ type: 'text', text })),
+      }];
+    }
+    const result = await graphRequest(phoneNumberId + '/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'template',
+        template,
+      }),
+    });
+    const messageId = result.messages?.[0]?.id;
+    return { isError: false, content: messageId ? `Template ${parsed.data.template_name} aceite pela Meta para ${to}. ID: ${messageId}` : 'Pedido de template aceite pela Meta.' };
   }
 
   if (toolName === 'send_audio_message') {
