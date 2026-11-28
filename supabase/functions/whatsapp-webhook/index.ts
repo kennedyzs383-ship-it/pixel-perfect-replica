@@ -14,7 +14,7 @@ function contactNameFrom(contacts: unknown[], phone: string): string | null {
 }
 
 function metaTimestamp(value: unknown): string | null {
-  if (typeof value !== "string" || !/^\\d{1,12}$/.test(value)) return null;
+  if (typeof value !== "string" || !/^\d{1,12}$/.test(value)) return null;
   const date = new Date(Number(value) * 1000);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
