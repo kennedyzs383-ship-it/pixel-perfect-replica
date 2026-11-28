@@ -132,7 +132,7 @@ async function broadcastIncomingMessages(payload: Record<string, unknown>): Prom
             media_mime_type: mediaPayload && typeof mediaPayload.mime_type === "string" ? mediaPayload.mime_type : null,
             meta_timestamp: metaTimestamp(item.timestamp),
             phone_number_id: configuredPhoneNumberId,
-            raw_message: item,
+            raw_message: { id: item.id, type, timestamp: typeof item.timestamp === "string" ? item.timestamp : null },
           }, { onConflict: "owner_id,message_id", ignoreDuplicates: true });
         if (persistError) throw new Error("Could not persist incoming WhatsApp message: " + persistError.message);
         const messageText = messageTextFrom(item, type);
