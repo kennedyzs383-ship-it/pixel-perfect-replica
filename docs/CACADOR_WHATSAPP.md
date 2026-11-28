@@ -211,3 +211,16 @@ Na branch atual da PR #19 foi acrescentado o encaminhamento de mensagens recebid
 - O WebRTC usa STUN público; TURN e teste real entre dois números elegíveis continuam pendentes.
 - A branch ainda exige CI para os commits recentes e validação ponta a ponta com a Meta antes de se considerar concluída.
 - Não foi feito merge nem novo deploy de produção nesta etapa.
+
+
+## Recuperação segura de multimédia — 28-11-2026
+
+Foi adicionada a Edge Function `whatsapp-media` na branch da PR:
+
+- Exige sessão Supabase autenticada e valida que o utilizador corresponde ao proprietário configurado.
+- Confirma que o par `message_id` / `media_id` existe na inbox desse proprietário e pertence ao número Cloud API configurado.
+- Obtém o URL temporário da Meta apenas no servidor; o token nunca é enviado ao browser.
+- Aceita apenas URLs HTTPS de hosts de media Meta conhecidos e bloqueia redirecionamentos.
+- Limita o download a 20 MB, aplica uma lista restrita de MIME types e devolve o ficheiro sem cache, com `nosniff`.
+- Não guarda cópias permanentes nem interpreta o conteúdo. A transcrição de áudio, OCR de imagens e análise de documentos continuam por implementar.
+- A função está apenas na branch; não foi publicada no Supabase. A validação do CI ainda é necessária.
