@@ -1,6 +1,6 @@
 begin;
 
-select plan(8);
+select plan(9);
 
 select has_table(
   'public',
@@ -54,6 +54,11 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'public.get_whatsapp_business_channel_secret(uuid,text)', 'EXECUTE'),
   'Authenticated owners cannot retrieve decrypted channel secrets'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.whatsapp_business_channels', 'DELETE'),
+  'Owners revoke channels instead of deleting channel audit history'
 );
 
 select * from finish();
